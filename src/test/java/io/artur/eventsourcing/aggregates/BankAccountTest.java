@@ -3,6 +3,8 @@ package io.artur.eventsourcing.aggregates;
 import io.artur.eventsourcing.events.AccountEvent;
 import io.artur.eventsourcing.events.AccountOpenedEvent;
 import io.artur.eventsourcing.events.MoneyDepositedEvent;
+import io.artur.eventsourcing.eventstores.EventStore;
+import io.artur.eventsourcing.eventstores.InMemoryEventStore;
 import io.artur.eventsourcing.snapshots.AccountSnapshot;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -17,10 +19,12 @@ import static org.junit.jupiter.api.Assertions.*;
 class BankAccountTest {
 
     private BankAccount bankAccount;
+    private EventStore<AccountEvent, UUID> eventStore;
 
     @BeforeEach
     void setUp() {
-        bankAccount = new BankAccount();
+        eventStore = new InMemoryEventStore<>();
+        bankAccount = new BankAccount(eventStore);
     }
 
     @Test
@@ -81,15 +85,15 @@ class BankAccountTest {
         final String accountHolder = "Michael Smith";
         final UUID accountId = UUID.randomUUID();
         final BigDecimal deposit = BigDecimal.valueOf(100);
-        final List<AccountEvent> accountEvents = List.of(
+        final EventStore<AccountEvent, UUID> eventStoreToReconstruct = new InMemoryEventStore<>();
+        final List<AccountEvent> eventsToAdd = List.of(
                 new AccountOpenedEvent(accountId, accountHolder),
                 new MoneyDepositedEvent(accountId, deposit)
         );
-
-        final BankAccount reconstructed = BankAccount.reconstruct(accountEvents, null);
+        final BankAccount reconstructed = BankAccount.reconstruct(eventStoreToReconstruct, eventsToAdd, null);
 
         assertNotNull(reconstructed);
-        assertEquals(accountEvents.size(), reconstructed.getEvents().size());
+        assertEquals(eventStoreToReconstruct.eventsCount(accountId), reconstructed.getEvents().size());
         assertEquals(accountId, reconstructed.getAccountId());
         assertEquals(deposit, reconstructed.getBalance());
         assertEquals(accountHolder, reconstructed.getAccountHolder());
@@ -102,14 +106,15 @@ class BankAccountTest {
         final BigDecimal deposit = BigDecimal.valueOf(200);
 
         final AccountSnapshot accountSnapshot = createAccountSnapshot(accountId, accountHolder, deposit);
-        final List<AccountEvent> events = List.of(
+        final EventStore<AccountEvent, UUID> eventStoreToReconstruct = new InMemoryEventStore<>();
+        final List<AccountEvent> eventsToAdd = List.of(
                 new MoneyDepositedEvent(accountId, deposit),
                 new MoneyDepositedEvent(accountId, deposit)
         );
-        final BankAccount reconstructed = BankAccount.reconstruct(events, accountSnapshot);
+        final BankAccount reconstructed = BankAccount.reconstruct(eventStoreToReconstruct, eventsToAdd, accountSnapshot);
 
         assertNotNull(reconstructed);
-        assertEquals(events.size(), reconstructed.getEvents().size());
+        assertEquals(eventStoreToReconstruct.eventsCount(accountId), reconstructed.getEvents().size());
         assertEquals(accountId, reconstructed.getAccountId());
         assertEquals(deposit.multiply(BigDecimal.valueOf(3L)), reconstructed.getBalance());
         assertEquals(accountHolder, reconstructed.getAccountHolder());
@@ -125,9 +130,10 @@ class BankAccountTest {
 
     @Test
     void applyOpenAccountEventTwoTimes() {
-        bankAccount.openAccount("test");
+        final UUID accountId = UUID.randomUUID();
+        bankAccount.apply(new AccountOpenedEvent(accountId, "test"));
         assertThrows(IllegalStateException.class,
-                () -> bankAccount.openAccount("second"));
+                () -> bankAccount.apply(new AccountOpenedEvent(accountId, "second")));
     }
 
     @Test
@@ -151,7 +157,7 @@ class BankAccountTest {
             final UUID accountId,
             final String accountHolder,
             final BigDecimal balance) {
-        final BankAccount account = new BankAccount();
+        final BankAccount account = new BankAccount(new InMemoryEventStore<>());
         account.apply(new AccountOpenedEvent(accountId, accountHolder));
         account.apply(new MoneyDepositedEvent(accountId, balance));
         return new AccountSnapshot(account);

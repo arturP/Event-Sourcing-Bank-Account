@@ -4,24 +4,33 @@
   <groupId>io.artur</groupId>
   <artifactId>event-sourcing-bank-account</artifactId>
   <version>1.0-SNAPSHOT</version>
-  <name>Archetype - event-sourcing-bank-account</name>
-  <url>http://maven.apache.org</url>
+  <name>event-sourcing-bank-account</name>
+
+  <properties>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <maven.compiler.version>17</maven.compiler.version>
+    <junit.jupiter.version>5.11.3</junit.jupiter.version>
+  </properties>
+
   <dependencies>
     <dependency>
       <groupId>org.junit.jupiter</groupId>
       <artifactId>junit-jupiter</artifactId>
-      <version>RELEASE</version>
+      <version>${junit.jupiter.version}</version>
       <scope>test</scope>
     </dependency>
   </dependencies>
+
   <build>
     <plugins>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-compiler-plugin</artifactId>
+        <version>3.13.0</version>
         <configuration>
-          <source>17</source>
-          <target>17</target>
+          <source>${maven.compiler.version}</source>
+          <target>${maven.compiler.version}</target>
+          <release>${maven.compiler.version}</release>
         </configuration>
       </plugin>
     </plugins>

@@ -4,6 +4,7 @@ import io.artur.eventsourcing.events.AccountEvent;
 import io.artur.eventsourcing.events.MoneyDepositedEvent;
 import io.artur.eventsourcing.events.MoneyWithdrawnEvent;
 import io.artur.eventsourcing.events.AccountOpenedEvent;
+import io.artur.eventsourcing.eventstores.EventStore;
 import io.artur.eventsourcing.snapshots.AccountSnapshot;
 
 import java.math.BigDecimal;
@@ -17,17 +18,17 @@ public class BankAccount {
     private UUID accountId;
     private String accountHolder;
     private BigDecimal balance;
-    private List<AccountEvent> events;
+    private EventStore<AccountEvent, UUID> eventStore;
     private AccountSnapshot latestSnapshot;
 
-    public BankAccount() {
-        this.events = new ArrayList<>();
+    public BankAccount(final  EventStore<AccountEvent, UUID> eventStore) {
+        this.eventStore = eventStore;
         this.balance = BigDecimal.ZERO;
     }
 
     public void apply(AccountEvent event) {
         if (event instanceof AccountOpenedEvent openEvent) {
-            if (!events.isEmpty()) {
+            if (!eventStore.isEmpty(event.getId())) {
                 throw new IllegalStateException("Account already opened");
             }
             this.accountId = openEvent.getId();
@@ -39,11 +40,11 @@ public class BankAccount {
         } else {
             throw new IllegalArgumentException("Unsupported event type " + event.getClass().getName());
         }
-        events.add(event);
+        eventStore.saveEvent(event.getId(), event);
     }
 
     public List<AccountEvent> getEvents() {
-        return new ArrayList<>(events);
+        return eventStore.getEventStream(accountId);
     }
 
     public void openAccount(final String accountHolder) {
@@ -67,7 +68,7 @@ public class BankAccount {
     }
 
     private void createSnapshotIfNeeded() {
-        if (MAX_TRANSACTIONS_BEFORE_SNAPSHOT <= events.size()) {
+        if (MAX_TRANSACTIONS_BEFORE_SNAPSHOT <= eventStore.eventsCount(accountId)) {
             this.latestSnapshot = new AccountSnapshot(this);
         }
     }
@@ -88,16 +89,19 @@ public class BankAccount {
         return latestSnapshot;
     }
 
-    public static BankAccount reconstruct(final List<AccountEvent> events, final AccountSnapshot snapshot) {
-        final BankAccount bankAccount = new BankAccount();
-        List<AccountEvent> eventsToApply = new ArrayList<>(events);
+    public static BankAccount reconstruct(
+            final EventStore<AccountEvent, UUID> eventStore,
+            final List<AccountEvent> eventsToAdd,
+            final AccountSnapshot snapshot) {
+        final BankAccount bankAccount = new BankAccount(eventStore);
+        List<AccountEvent> eventsToApply = new ArrayList<>(eventsToAdd);
 
         if (snapshot != null) {
             bankAccount.accountId = snapshot.getAccountId();
             bankAccount.accountHolder = snapshot.getAccountHolder();
             bankAccount.balance = snapshot.getBalance();
 
-            eventsToApply = events.stream()
+            eventsToApply = eventsToApply.stream()
                     .filter(event -> event.getTimestamp().isAfter(snapshot.getSnapshotTime()))
                     .toList();
         }
