@@ -25,6 +25,33 @@ public class JdbcSnapshotStore implements SnapshotStore {
         this.objectMapper = new ObjectMapper()
                 .registerModule(new JavaTimeModule())
                 .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+        initializeDatabase();
+    }
+    
+    private void initializeDatabase() {
+        try (Connection conn = dataSource.getConnection();
+             Statement stmt = conn.createStatement()) {
+            
+            // Create snapshots table if it doesn't exist
+            stmt.execute("""
+                CREATE TABLE IF NOT EXISTS account_snapshots (
+                    snapshot_id BIGINT AUTO_INCREMENT PRIMARY KEY,
+                    account_id UUID NOT NULL,
+                    snapshot_time TIMESTAMP NOT NULL,
+                    snapshot_data CLOB NOT NULL
+                )
+            """);
+            
+            // Create unique constraint
+            stmt.execute("""
+                ALTER TABLE account_snapshots ADD CONSTRAINT IF NOT EXISTS
+                unique_account_snapshot UNIQUE (account_id, snapshot_time)
+            """);
+            
+        } catch (SQLException e) {
+            LOGGER.log(Level.SEVERE, "Failed to initialize snapshot store database", e);
+            throw new RuntimeException("Failed to initialize snapshot store database", e);
+        }
     }
 
     @Override

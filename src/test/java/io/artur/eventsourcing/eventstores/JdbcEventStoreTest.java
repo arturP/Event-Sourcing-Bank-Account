@@ -41,8 +41,18 @@ class JdbcEventStoreTest {
         // Clear database tables
         try (Connection conn = eventStore.dataSource.getConnection();
              Statement stmt = conn.createStatement()) {
-            stmt.execute("TRUNCATE TABLE account_events");
-            stmt.execute("TRUNCATE TABLE account_snapshots");
+            // We'll try to delete but wrap in try/catch since tables might not exist yet
+            try {
+                stmt.execute("DELETE FROM account_events");
+            } catch (SQLException e) {
+                // Ignore - table might not exist yet
+            }
+            
+            try {
+                stmt.execute("DELETE FROM account_snapshots");
+            } catch (SQLException e) {
+                // Ignore - table might not exist yet
+            }
         }
     }
 
@@ -99,7 +109,7 @@ class JdbcEventStoreTest {
         BigDecimal balance = BigDecimal.valueOf(100);
         LocalDateTime snapshotTime = LocalDateTime.now();
         
-        AccountSnapshot snapshot = new AccountSnapshot(accountId, accountHolder, balance, snapshotTime) {};
+        AccountSnapshot snapshot = new AccountSnapshot(accountId, accountHolder, balance, snapshotTime);
         
         // Save snapshot
         eventStore.saveSnapshot(snapshot);

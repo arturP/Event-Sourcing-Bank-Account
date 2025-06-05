@@ -73,10 +73,12 @@ public class JdbcEventStore implements EventStore<AccountEvent, UUID>, SnapshotC
                     account_id UUID NOT NULL,
                     event_timestamp TIMESTAMP NOT NULL,
                     event_type VARCHAR(100) NOT NULL,
-                    event_data CLOB NOT NULL,
-                    INDEX (account_id)
+                    event_data CLOB NOT NULL
                 )
             """);
+            
+            // Create index separately
+            stmt.execute("CREATE INDEX IF NOT EXISTS idx_account_events_account_id ON account_events(account_id)");
             
         } catch (SQLException e) {
             LOGGER.log(Level.SEVERE, "Failed to initialize database", e);

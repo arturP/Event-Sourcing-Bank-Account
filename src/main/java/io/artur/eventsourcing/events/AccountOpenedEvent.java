@@ -5,8 +5,13 @@ import java.util.UUID;
 
 public class AccountOpenedEvent extends AccountEventBase {
 
-    private final String accountHolder;
+    private String accountHolder;
 
+    // Default constructor for Jackson
+    public AccountOpenedEvent() {
+        super();
+    }
+    
     public AccountOpenedEvent(UUID accountId, String accountHolder) {
         super(accountId, LocalDateTime.now());
         this.accountHolder = accountHolder;
@@ -14,5 +19,10 @@ public class AccountOpenedEvent extends AccountEventBase {
 
     public String getAccountHolder() {
         return accountHolder;
+    }
+    
+    // Setter for Jackson deserialization
+    public void setAccountHolder(String accountHolder) {
+        this.accountHolder = accountHolder;
     }
 }

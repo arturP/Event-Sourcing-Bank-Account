@@ -17,11 +17,13 @@ public class EventSerializer {
     public EventSerializer() {
         PolymorphicTypeValidator ptv = BasicPolymorphicTypeValidator.builder()
                 .allowIfBaseType(AccountEvent.class)
+                .allowIfSubType("io.artur.eventsourcing.events")
                 .build();
 
         this.objectMapper = new ObjectMapper()
                 .registerModule(new JavaTimeModule())
                 .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
+                .configure(SerializationFeature.FAIL_ON_EMPTY_BEANS, false)
                 .activateDefaultTyping(ptv, ObjectMapper.DefaultTyping.NON_FINAL);
     }
 

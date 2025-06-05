@@ -6,8 +6,13 @@ import java.util.UUID;
 
 public class MoneyDepositedEvent extends AccountEventBase {
 
-    private final BigDecimal amount;
+    private BigDecimal amount;
 
+    // Default constructor for Jackson
+    public MoneyDepositedEvent() {
+        super();
+    }
+    
     public MoneyDepositedEvent(final UUID accountId, final BigDecimal amount) {
         super(accountId, LocalDateTime.now());
         this.amount = amount;
@@ -15,5 +20,10 @@ public class MoneyDepositedEvent extends AccountEventBase {
 
     public BigDecimal getAmount() {
         return amount;
+    }
+    
+    // Setter for Jackson deserialization
+    public void setAmount(BigDecimal amount) {
+        this.amount = amount;
     }
 }

@@ -63,7 +63,7 @@ public class DatabaseConfig {
             return;
         }
         
-        String resourcePath = schemaFile.substring("classpath:".length());
+        String resourcePath = "/" + schemaFile.substring("classpath:".length());
         try (InputStream schemaInput = getClass().getResourceAsStream(resourcePath)) {
             if (schemaInput == null) {
                 LOGGER.warning("Unable to find schema file: " + resourcePath);
@@ -75,7 +75,7 @@ public class DatabaseConfig {
                 for (String statement : schema.split(";")) {
                     if (!statement.trim().isEmpty()) {
                         try (var stmt = conn.createStatement()) {
-                            stmt.execute(statement);
+                            stmt.execute(statement.trim());
                         }
                     }
                 }
