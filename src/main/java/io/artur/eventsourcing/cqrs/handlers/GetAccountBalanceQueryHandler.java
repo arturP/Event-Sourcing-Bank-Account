@@ -1,6 +1,5 @@
 package io.artur.eventsourcing.cqrs.handlers;
 
-import io.artur.eventsourcing.aggregates.BankAccount;
 import io.artur.eventsourcing.cqrs.QueryHandler;
 import io.artur.eventsourcing.cqrs.queries.GetAccountBalanceQuery;
 import io.artur.eventsourcing.domain.Money;

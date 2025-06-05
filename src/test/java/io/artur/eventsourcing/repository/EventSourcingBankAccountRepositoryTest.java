@@ -1,7 +1,6 @@
 package io.artur.eventsourcing.repository;
 
 import io.artur.eventsourcing.aggregates.BankAccount;
-import io.artur.eventsourcing.domain.AccountNumber;
 import io.artur.eventsourcing.events.AccountEvent;
 import io.artur.eventsourcing.eventstores.EventStore;
 import io.artur.eventsourcing.eventstores.InMemoryEventStore;

@@ -3,7 +3,6 @@ package io.artur.eventsourcing.aggregates;
 import io.artur.eventsourcing.commands.DepositMoneyCommand;
 import io.artur.eventsourcing.commands.OpenAccountCommand;
 import io.artur.eventsourcing.commands.WithdrawMoneyCommand;
-import io.artur.eventsourcing.domain.AccountHolder;
 import io.artur.eventsourcing.domain.AccountNumber;
 import io.artur.eventsourcing.domain.Money;
 import io.artur.eventsourcing.events.AccountEvent;
@@ -30,7 +29,7 @@ public class BankAccount {
     private String accountHolder;
     private BigDecimal balance;
     private BigDecimal overdraftLimit;
-    private EventStore<AccountEvent, UUID> eventStore;
+    private final EventStore<AccountEvent, UUID> eventStore;
     private AccountSnapshot latestSnapshot;
 
     public BankAccount(final  EventStore<AccountEvent, UUID> eventStore) {

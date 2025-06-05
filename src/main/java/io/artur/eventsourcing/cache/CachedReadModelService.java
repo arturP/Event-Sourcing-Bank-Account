@@ -4,7 +4,6 @@ import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.stats.CacheStats;
 import io.artur.eventsourcing.aggregates.BankAccount;
-import io.artur.eventsourcing.domain.Money;
 import io.artur.eventsourcing.events.AccountEvent;
 import io.artur.eventsourcing.eventstores.EventStore;
 import io.artur.eventsourcing.projections.AccountSummaryProjection;
@@ -105,9 +104,7 @@ public class CachedReadModelService {
             return CompletableFuture.completedFuture(cached);
         }
         
-        return CompletableFuture.supplyAsync(() -> {
-            return getOrCreateAccountSummary(accountId, accountLoader);
-        }, executor);
+        return CompletableFuture.supplyAsync(() -> getOrCreateAccountSummary(accountId, accountLoader), executor);
     }
     
     public Optional<BigDecimal> getCachedBalance(UUID accountId) {
