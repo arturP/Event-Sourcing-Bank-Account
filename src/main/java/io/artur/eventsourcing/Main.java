@@ -5,6 +5,7 @@ import io.artur.eventsourcing.config.DatabaseConfig;
 import io.artur.eventsourcing.events.AccountEvent;
 import io.artur.eventsourcing.eventstores.EventStore;
 import io.artur.eventsourcing.eventstores.JdbcEventStore;
+import io.artur.eventsourcing.exceptions.OverdraftExceededException;
 import io.artur.eventsourcing.snapshots.JdbcSnapshotStore;
 import io.artur.eventsourcing.snapshots.SnapshotStore;
 
@@ -27,12 +28,12 @@ public class Main {
         EventStore<AccountEvent, UUID> eventStore = new JdbcEventStore(
                 dbConfig.getDataSource(), snapshotStore);
         
-        // Create a new account
+        // Create a new account with overdraft protection
         BankAccount account = new BankAccount(eventStore);
-        account.openAccount("John Doe");
+        account.openAccount("John Doe", BigDecimal.valueOf(200.00));
         UUID accountId = account.getAccountId();
         
-        LOGGER.info("Created new account with ID: " + accountId);
+        LOGGER.info("Created new account with ID: " + accountId + " and overdraft limit: $" + account.getOverdraftLimit());
         
         // Perform some operations
         account.deposit(BigDecimal.valueOf(500.00));
@@ -40,6 +41,17 @@ public class Main {
         
         account.withdraw(BigDecimal.valueOf(150.00));
         LOGGER.info("Withdrew $150.00, new balance: " + account.getBalance());
+        
+        // Test overdraft functionality
+        account.withdraw(BigDecimal.valueOf(400.00));
+        LOGGER.info("Withdrew $400.00 (using overdraft), new balance: " + account.getBalance());
+        
+        // Try to exceed overdraft limit
+        try {
+            account.withdraw(BigDecimal.valueOf(200.00));
+        } catch (OverdraftExceededException e) {
+            LOGGER.warning("Overdraft limit exceeded: " + e.getMessage());
+        }
         
         // Create many events to trigger snapshot creation
         for (int i = 0; i < 9; i++) {
@@ -50,6 +62,6 @@ public class Main {
         // Load the account from the event store
         BankAccount loadedAccount = BankAccount.loadFromStore(eventStore, accountId);
         LOGGER.info("Loaded account from store. Account holder: " + loadedAccount.getAccountHolder() + 
-                ", Balance: " + loadedAccount.getBalance());
+                ", Balance: " + loadedAccount.getBalance() + ", Overdraft limit: $" + loadedAccount.getOverdraftLimit());
     }
 }

@@ -6,6 +6,7 @@ import io.artur.eventsourcing.events.MoneyWithdrawnEvent;
 import io.artur.eventsourcing.events.AccountOpenedEvent;
 import io.artur.eventsourcing.eventstores.EventStore;
 import io.artur.eventsourcing.eventstores.SnapshotCapable;
+import io.artur.eventsourcing.exceptions.OverdraftExceededException;
 import io.artur.eventsourcing.snapshots.AccountSnapshot;
 
 import java.math.BigDecimal;
@@ -20,12 +21,14 @@ public class BankAccount {
     private UUID accountId;
     private String accountHolder;
     private BigDecimal balance;
+    private BigDecimal overdraftLimit;
     private EventStore<AccountEvent, UUID> eventStore;
     private AccountSnapshot latestSnapshot;
 
     public BankAccount(final  EventStore<AccountEvent, UUID> eventStore) {
         this.eventStore = eventStore;
         this.balance = BigDecimal.ZERO;
+        this.overdraftLimit = BigDecimal.ZERO;
     }
 
     public void apply(AccountEvent event) {
@@ -35,6 +38,7 @@ public class BankAccount {
             }
             this.accountId = openEvent.getId();
             this.accountHolder = openEvent.getAccountHolder();
+            this.overdraftLimit = openEvent.getOverdraftLimit();
         } else if (event instanceof MoneyDepositedEvent depositEvent) {
             this.balance = this.balance.add(depositEvent.getAmount());
         } else if (event instanceof MoneyWithdrawnEvent withdrawEvent) {
@@ -50,7 +54,11 @@ public class BankAccount {
     }
 
     public void openAccount(final String accountHolder) {
-        apply(new AccountOpenedEvent(UUID.randomUUID(), accountHolder));
+        openAccount(accountHolder, BigDecimal.ZERO);
+    }
+    
+    public void openAccount(final String accountHolder, final BigDecimal overdraftLimit) {
+        apply(new AccountOpenedEvent(UUID.randomUUID(), accountHolder, overdraftLimit));
     }
 
     public BigDecimal deposit(final BigDecimal amount) {
@@ -60,12 +68,15 @@ public class BankAccount {
     }
 
     public BigDecimal withdraw(final BigDecimal amount) {
-        if (amount.compareTo(balance) <= 0) {
-            apply(new MoneyWithdrawnEvent(this.accountId, amount));
-            createSnapshotIfNeeded();
-        } else {
-            throw new IllegalStateException("Insufficient founds");
+        BigDecimal newBalance = this.balance.subtract(amount);
+        BigDecimal minimumAllowedBalance = this.overdraftLimit.negate();
+        
+        if (newBalance.compareTo(minimumAllowedBalance) < 0) {
+            throw new OverdraftExceededException(this.balance, this.overdraftLimit, amount);
         }
+        
+        apply(new MoneyWithdrawnEvent(this.accountId, amount));
+        createSnapshotIfNeeded();
         return balance;
     }
 
@@ -89,6 +100,14 @@ public class BankAccount {
     public BigDecimal getBalance() {
         return this.balance;
     }
+    
+    public BigDecimal getOverdraftLimit() {
+        return this.overdraftLimit;
+    }
+    
+    public void setOverdraftLimit(final BigDecimal overdraftLimit) {
+        this.overdraftLimit = overdraftLimit;
+    }
 
     public AccountSnapshot getLatestSnapshot() {
         return latestSnapshot;
@@ -105,6 +124,7 @@ public class BankAccount {
             bankAccount.accountId = snapshot.getAccountId();
             bankAccount.accountHolder = snapshot.getAccountHolder();
             bankAccount.balance = snapshot.getBalance();
+            bankAccount.overdraftLimit = snapshot.getOverdraftLimit();
             bankAccount.latestSnapshot = snapshot;
 
             eventsToApply = eventsToApply.stream()

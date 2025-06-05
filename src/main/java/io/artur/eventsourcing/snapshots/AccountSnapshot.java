@@ -11,19 +11,26 @@ public class AccountSnapshot {
     private final UUID accountId;
     private final String accountHolder;
     private final BigDecimal balance;
+    private final BigDecimal overdraftLimit;
     private final LocalDateTime snapshotTime;
 
     public AccountSnapshot(final BankAccount bankAccount) {
         this.accountId = bankAccount.getAccountId();
         this.accountHolder = bankAccount.getAccountHolder();
         this.balance = bankAccount.getBalance();
+        this.overdraftLimit = bankAccount.getOverdraftLimit();
         this.snapshotTime = LocalDateTime.now();
     }
     
     public AccountSnapshot(UUID accountId, String accountHolder, BigDecimal balance, LocalDateTime snapshotTime) {
+        this(accountId, accountHolder, balance, BigDecimal.ZERO, snapshotTime);
+    }
+    
+    public AccountSnapshot(UUID accountId, String accountHolder, BigDecimal balance, BigDecimal overdraftLimit, LocalDateTime snapshotTime) {
         this.accountId = accountId;
         this.accountHolder = accountHolder;
         this.balance = balance;
+        this.overdraftLimit = overdraftLimit;
         this.snapshotTime = snapshotTime;
     }
 
@@ -37,6 +44,10 @@ public class AccountSnapshot {
 
     public BigDecimal getBalance() {
         return balance;
+    }
+    
+    public BigDecimal getOverdraftLimit() {
+        return overdraftLimit;
     }
 
     public LocalDateTime getSnapshotTime() {

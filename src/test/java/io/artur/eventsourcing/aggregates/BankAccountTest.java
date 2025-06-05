@@ -5,6 +5,7 @@ import io.artur.eventsourcing.events.AccountOpenedEvent;
 import io.artur.eventsourcing.events.MoneyDepositedEvent;
 import io.artur.eventsourcing.eventstores.EventStore;
 import io.artur.eventsourcing.eventstores.InMemoryEventStore;
+import io.artur.eventsourcing.exceptions.OverdraftExceededException;
 import io.artur.eventsourcing.snapshots.AccountSnapshot;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -124,7 +125,7 @@ class BankAccountTest {
     void withdrawMoreThanAccountBalance() {
         bankAccount.openAccount("test account");
         bankAccount.deposit(BigDecimal.TEN);
-        assertThrows(IllegalStateException.class,
+        assertThrows(OverdraftExceededException.class,
                 () -> bankAccount.withdraw(BigDecimal.valueOf(11)));
     }
 
@@ -151,6 +152,96 @@ class BankAccountTest {
         };
         assertThrows(IllegalArgumentException.class,
                 () -> bankAccount.apply(unsupported));
+    }
+
+    @Test
+    void openAccountWithOverdraftLimit() {
+        final String accountHolder = "Test User";
+        final BigDecimal overdraftLimit = BigDecimal.valueOf(500);
+        bankAccount.openAccount(accountHolder, overdraftLimit);
+
+        assertEquals(1, bankAccount.getEvents().size());
+        assertEquals(accountHolder, bankAccount.getAccountHolder());
+        assertEquals(BigDecimal.ZERO, bankAccount.getBalance());
+        assertEquals(overdraftLimit, bankAccount.getOverdraftLimit());
+        assertNotNull(bankAccount.getAccountId());
+    }
+
+    @Test
+    void withdrawWithinOverdraftLimit() {
+        final String accountHolder = "Test User";
+        final BigDecimal overdraftLimit = BigDecimal.valueOf(100);
+        bankAccount.openAccount(accountHolder, overdraftLimit);
+        
+        bankAccount.deposit(BigDecimal.valueOf(50));
+        BigDecimal finalBalance = bankAccount.withdraw(BigDecimal.valueOf(120));
+        
+        assertEquals(BigDecimal.valueOf(-70), finalBalance);
+        assertEquals(BigDecimal.valueOf(-70), bankAccount.getBalance());
+    }
+
+    @Test
+    void withdrawExceedsOverdraftLimit() {
+        final String accountHolder = "Test User";
+        final BigDecimal overdraftLimit = BigDecimal.valueOf(100);
+        bankAccount.openAccount(accountHolder, overdraftLimit);
+        
+        bankAccount.deposit(BigDecimal.valueOf(50));
+        
+        OverdraftExceededException exception = assertThrows(OverdraftExceededException.class,
+                () -> bankAccount.withdraw(BigDecimal.valueOf(151)));
+        
+        assertEquals(BigDecimal.valueOf(50), exception.getCurrentBalance());
+        assertEquals(overdraftLimit, exception.getOverdraftLimit());
+        assertEquals(BigDecimal.valueOf(151), exception.getRequestedAmount());
+    }
+
+    @Test
+    void modifyOverdraftLimit() {
+        final String accountHolder = "Test User";
+        bankAccount.openAccount(accountHolder, BigDecimal.valueOf(100));
+        
+        assertEquals(BigDecimal.valueOf(100), bankAccount.getOverdraftLimit());
+        
+        bankAccount.setOverdraftLimit(BigDecimal.valueOf(200));
+        assertEquals(BigDecimal.valueOf(200), bankAccount.getOverdraftLimit());
+    }
+
+    @Test
+    void snapshotIncludesOverdraftLimit() {
+        final String accountHolder = "Test User";
+        final BigDecimal overdraftLimit = BigDecimal.valueOf(300);
+        bankAccount.openAccount(accountHolder, overdraftLimit);
+        
+        for (int i = 0; i < 10; i++) {
+            bankAccount.deposit(BigDecimal.valueOf(10));
+        }
+        
+        AccountSnapshot snapshot = bankAccount.getLatestSnapshot();
+        assertNotNull(snapshot);
+        assertEquals(overdraftLimit, snapshot.getOverdraftLimit());
+    }
+
+    @Test
+    void reconstructFromSnapshotWithOverdraftLimit() {
+        final String accountHolder = "Test User";
+        final UUID accountId = UUID.randomUUID();
+        final BigDecimal balance = BigDecimal.valueOf(200);
+        final BigDecimal overdraftLimit = BigDecimal.valueOf(150);
+        
+        final AccountSnapshot snapshot = new AccountSnapshot(accountId, accountHolder, balance, overdraftLimit, LocalDateTime.now());
+        final EventStore<AccountEvent, UUID> eventStoreToReconstruct = new InMemoryEventStore<>();
+        final List<AccountEvent> eventsToAdd = List.of(
+                new MoneyDepositedEvent(accountId, BigDecimal.valueOf(50))
+        );
+        
+        final BankAccount reconstructed = BankAccount.reconstruct(eventStoreToReconstruct, eventsToAdd, snapshot);
+        
+        assertNotNull(reconstructed);
+        assertEquals(accountId, reconstructed.getAccountId());
+        assertEquals(balance.add(BigDecimal.valueOf(50)), reconstructed.getBalance());
+        assertEquals(accountHolder, reconstructed.getAccountHolder());
+        assertEquals(overdraftLimit, reconstructed.getOverdraftLimit());
     }
 
     private AccountSnapshot createAccountSnapshot(

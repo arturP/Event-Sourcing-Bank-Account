@@ -18,6 +18,7 @@ public class EventSerializer {
         PolymorphicTypeValidator ptv = BasicPolymorphicTypeValidator.builder()
                 .allowIfBaseType(AccountEvent.class)
                 .allowIfSubType("io.artur.eventsourcing.events")
+                .allowIfSubType("java.math.BigDecimal")
                 .build();
 
         this.objectMapper = new ObjectMapper()
