@@ -4,7 +4,6 @@ import io.artur.eventsourcing.events.AccountEvent;
 import io.artur.eventsourcing.events.AccountOpenedEvent;
 import io.artur.eventsourcing.events.MoneyDepositedEvent;
 import io.artur.eventsourcing.snapshots.AccountSnapshot;
-import io.artur.eventsourcing.snapshots.JdbcSnapshotStore;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 

@@ -11,7 +11,6 @@ import io.artur.eventsourcing.snapshots.SnapshotStore;
 import javax.sql.DataSource;
 import java.sql.*;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;

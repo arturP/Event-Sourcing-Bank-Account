@@ -84,15 +84,11 @@ public class EventSourcingBankAccountRepository implements BankAccountRepository
     
     @Override
     public List<BankAccount> findAll() {
-        List<BankAccount> allAccounts = new ArrayList<>();
-        
+
         // This is a simplified implementation - in practice, you'd query the event store
         // for all account IDs and then load each one
-        for (BankAccount account : cache.values()) {
-            allAccounts.add(account);
-        }
-        
-        return allAccounts;
+
+        return new ArrayList<>(cache.values());
     }
     
     @Override
