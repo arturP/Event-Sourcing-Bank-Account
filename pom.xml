@@ -13,6 +13,8 @@
     <h2.version>2.2.224</h2.version>
     <jackson.version>2.16.1</jackson.version>
     <hikari.version>5.1.0</hikari.version>
+    <metrics.version>4.2.25</metrics.version>
+    <caffeine.version>3.1.8</caffeine.version>
   </properties>
 
   <dependencies>
@@ -38,6 +40,25 @@
       <groupId>com.fasterxml.jackson.datatype</groupId>
       <artifactId>jackson-datatype-jsr310</artifactId>
       <version>${jackson.version}</version>
+    </dependency>
+    
+    <!-- Metrics and Performance Monitoring -->
+    <dependency>
+      <groupId>io.dropwizard.metrics</groupId>
+      <artifactId>metrics-core</artifactId>
+      <version>${metrics.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>io.dropwizard.metrics</groupId>
+      <artifactId>metrics-jvm</artifactId>
+      <version>${metrics.version}</version>
+    </dependency>
+    
+    <!-- Caching -->
+    <dependency>
+      <groupId>com.github.ben-manes.caffeine</groupId>
+      <artifactId>caffeine</artifactId>
+      <version>${caffeine.version}</version>
     </dependency>
     
     <!-- Testing -->

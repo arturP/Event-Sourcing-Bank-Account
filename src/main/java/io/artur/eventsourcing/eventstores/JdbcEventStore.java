@@ -137,6 +137,35 @@ public class JdbcEventStore implements EventStore<AccountEvent, UUID>, SnapshotC
     }
 
     @Override
+    public List<AccountEvent> getEventStream(UUID id, int offset, int limit) {
+        String sql = "SELECT event_data FROM account_events WHERE account_id = ? ORDER BY event_timestamp ASC LIMIT ? OFFSET ?";
+        
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            
+            pstmt.setObject(1, id);
+            pstmt.setInt(2, limit);
+            pstmt.setInt(3, offset);
+            
+            try (ResultSet rs = pstmt.executeQuery()) {
+                List<AccountEvent> events = new ArrayList<>();
+                
+                while (rs.next()) {
+                    String eventJson = rs.getString("event_data");
+                    AccountEvent event = eventSerializer.deserialize(eventJson);
+                    events.add(event);
+                }
+                
+                return events;
+            }
+            
+        } catch (SQLException e) {
+            LOGGER.log(Level.SEVERE, "Failed to retrieve paginated event stream", e);
+            throw new RuntimeException("Failed to retrieve paginated event stream", e);
+        }
+    }
+
+    @Override
     public boolean isEmpty(UUID id) {
         return eventsCount(id) == 0;
     }

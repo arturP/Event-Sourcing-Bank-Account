@@ -1,10 +1,13 @@
 package io.artur.eventsourcing.repository;
 
 import io.artur.eventsourcing.aggregates.BankAccount;
+import io.artur.eventsourcing.cache.CachedReadModelService;
 import io.artur.eventsourcing.domain.AccountNumber;
 import io.artur.eventsourcing.events.AccountEvent;
 import io.artur.eventsourcing.eventstores.EventStore;
+import io.artur.eventsourcing.projections.AccountSummaryProjection;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -17,11 +20,21 @@ public class EventSourcingBankAccountRepository implements BankAccountRepository
     private final EventStore<AccountEvent, UUID> eventStore;
     private final ConcurrentMap<UUID, BankAccount> cache;
     private final ConcurrentMap<AccountNumber, UUID> accountNumberIndex;
+    private final CachedReadModelService readModelCache;
     
     public EventSourcingBankAccountRepository(EventStore<AccountEvent, UUID> eventStore) {
         this.eventStore = eventStore;
         this.cache = new ConcurrentHashMap<>();
         this.accountNumberIndex = new ConcurrentHashMap<>();
+        this.readModelCache = new CachedReadModelService(eventStore);
+    }
+    
+    public EventSourcingBankAccountRepository(EventStore<AccountEvent, UUID> eventStore, 
+                                            CachedReadModelService.CacheConfiguration cacheConfig) {
+        this.eventStore = eventStore;
+        this.cache = new ConcurrentHashMap<>();
+        this.accountNumberIndex = new ConcurrentHashMap<>();
+        this.readModelCache = new CachedReadModelService(eventStore, cacheConfig);
     }
     
     @Override
@@ -36,6 +49,9 @@ public class EventSourcingBankAccountRepository implements BankAccountRepository
         if (aggregate.getAccountNumber() != null) {
             accountNumberIndex.put(aggregate.getAccountNumber(), aggregate.getAccountId());
         }
+        
+        // Update read model cache
+        readModelCache.updateBalance(aggregate.getAccountId(), aggregate.getBalance());
     }
     
     @Override
@@ -144,9 +160,37 @@ public class EventSourcingBankAccountRepository implements BankAccountRepository
     public void clearCache() {
         cache.clear();
         accountNumberIndex.clear();
+        readModelCache.invalidateAll();
     }
     
     public int getCacheSize() {
         return cache.size();
+    }
+    
+    // Fast balance lookup using read model cache
+    public Optional<BigDecimal> getCachedBalance(UUID accountId) {
+        return readModelCache.getCachedBalance(accountId);
+    }
+    
+    public BigDecimal getBalance(UUID accountId) {
+        return readModelCache.getOrCreateBalance(accountId, this::loadAccountFromStore);
+    }
+    
+    // Fast account summary lookup using read model cache
+    public Optional<AccountSummaryProjection> getCachedAccountSummary(UUID accountId) {
+        return readModelCache.getCachedAccountSummary(accountId);
+    }
+    
+    public AccountSummaryProjection getAccountSummary(UUID accountId) {
+        return readModelCache.getOrCreateAccountSummary(accountId, this::loadAccountFromStore);
+    }
+    
+    // Cache statistics for monitoring
+    public CachedReadModelService.CacheStatistics getCacheStatistics() {
+        return readModelCache.getCacheStatistics();
+    }
+    
+    private BankAccount loadAccountFromStore(UUID accountId) {
+        return BankAccount.loadFromStore(eventStore, accountId);
     }
 }

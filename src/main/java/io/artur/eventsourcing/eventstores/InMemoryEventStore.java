@@ -26,6 +26,16 @@ public class InMemoryEventStore<T extends AccountEvent, K> implements EventStore
     }
 
     @Override
+    public List<T> getEventStream(final K id, int offset, int limit) {
+        List<T> events = getEventStream(id);
+        if (offset >= events.size()) {
+            return Collections.emptyList();
+        }
+        int endIndex = Math.min(offset + limit, events.size());
+        return events.subList(offset, endIndex);
+    }
+
+    @Override
     public boolean isEmpty(final K id) {
         return getEventStream(id).isEmpty();
     }
