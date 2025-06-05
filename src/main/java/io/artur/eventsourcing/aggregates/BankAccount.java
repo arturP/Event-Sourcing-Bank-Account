@@ -5,11 +5,13 @@ import io.artur.eventsourcing.events.MoneyDepositedEvent;
 import io.artur.eventsourcing.events.MoneyWithdrawnEvent;
 import io.artur.eventsourcing.events.AccountOpenedEvent;
 import io.artur.eventsourcing.eventstores.EventStore;
+import io.artur.eventsourcing.eventstores.SnapshotCapable;
 import io.artur.eventsourcing.snapshots.AccountSnapshot;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 public class BankAccount {
@@ -70,6 +72,9 @@ public class BankAccount {
     private void createSnapshotIfNeeded() {
         if (MAX_TRANSACTIONS_BEFORE_SNAPSHOT <= eventStore.eventsCount(accountId)) {
             this.latestSnapshot = new AccountSnapshot(this);
+            if (eventStore instanceof SnapshotCapable snapshotCapable) {
+                snapshotCapable.saveSnapshot(this.latestSnapshot);
+            }
         }
     }
 
@@ -100,6 +105,7 @@ public class BankAccount {
             bankAccount.accountId = snapshot.getAccountId();
             bankAccount.accountHolder = snapshot.getAccountHolder();
             bankAccount.balance = snapshot.getBalance();
+            bankAccount.latestSnapshot = snapshot;
 
             eventsToApply = eventsToApply.stream()
                     .filter(event -> event.getTimestamp().isAfter(snapshot.getSnapshotTime()))
@@ -109,5 +115,24 @@ public class BankAccount {
         eventsToApply.forEach(bankAccount::apply);
 
         return bankAccount;
+    }
+    
+    public static BankAccount loadFromStore(final EventStore<AccountEvent, UUID> eventStore, final UUID accountId) {
+        AccountSnapshot snapshot = null;
+        
+        // Try to load snapshot if the event store supports it
+        if (eventStore instanceof SnapshotCapable snapshotCapable) {
+            Optional<AccountSnapshot> optionalSnapshot = snapshotCapable.getLatestSnapshot(accountId);
+            snapshot = optionalSnapshot.orElse(null);
+        }
+        
+        // Get the event stream
+        List<AccountEvent> events = eventStore.getEventStream(accountId);
+        
+        if (events.isEmpty() && snapshot == null) {
+            throw new IllegalArgumentException("Account with ID " + accountId + " does not exist");
+        }
+        
+        return reconstruct(eventStore, events, snapshot);
     }
 }

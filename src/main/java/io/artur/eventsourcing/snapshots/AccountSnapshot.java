@@ -19,6 +19,13 @@ public class AccountSnapshot {
         this.balance = bankAccount.getBalance();
         this.snapshotTime = LocalDateTime.now();
     }
+    
+    public AccountSnapshot(UUID accountId, String accountHolder, BigDecimal balance, LocalDateTime snapshotTime) {
+        this.accountId = accountId;
+        this.accountHolder = accountHolder;
+        this.balance = balance;
+        this.snapshotTime = snapshotTime;
+    }
 
     public UUID getAccountId() {
         return accountId;
