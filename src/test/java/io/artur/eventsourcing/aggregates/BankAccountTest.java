@@ -2,6 +2,7 @@ package io.artur.eventsourcing.aggregates;
 
 import io.artur.eventsourcing.events.AccountEvent;
 import io.artur.eventsourcing.events.AccountOpenedEvent;
+import io.artur.eventsourcing.events.EventMetadata;
 import io.artur.eventsourcing.events.MoneyDepositedEvent;
 import io.artur.eventsourcing.eventstores.EventStore;
 import io.artur.eventsourcing.eventstores.InMemoryEventStore;
@@ -148,6 +149,16 @@ class BankAccountTest {
             @Override
             public LocalDateTime getTimestamp() {
                 return null;
+            }
+            
+            @Override
+            public EventMetadata getMetadata() {
+                return null;
+            }
+            
+            @Override
+            public int getVersion() {
+                return 1;
             }
         };
         assertThrows(IllegalArgumentException.class,

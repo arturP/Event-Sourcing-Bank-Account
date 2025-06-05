@@ -1,6 +1,7 @@
 package io.artur.eventsourcing.serialization;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.databind.jsontype.BasicPolymorphicTypeValidator;
@@ -15,17 +16,12 @@ public class EventSerializer {
     private final ObjectMapper objectMapper;
 
     public EventSerializer() {
-        PolymorphicTypeValidator ptv = BasicPolymorphicTypeValidator.builder()
-                .allowIfBaseType(AccountEvent.class)
-                .allowIfSubType("io.artur.eventsourcing.events")
-                .allowIfSubType("java.math.BigDecimal")
-                .build();
-
         this.objectMapper = new ObjectMapper()
                 .registerModule(new JavaTimeModule())
                 .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
                 .configure(SerializationFeature.FAIL_ON_EMPTY_BEANS, false)
-                .activateDefaultTyping(ptv, ObjectMapper.DefaultTyping.NON_FINAL);
+                .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
+                .enableDefaultTyping(ObjectMapper.DefaultTyping.NON_FINAL);
     }
 
     public String serialize(AccountEvent event) {

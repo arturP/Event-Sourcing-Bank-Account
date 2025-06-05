@@ -6,4 +6,6 @@ import java.util.UUID;
 public interface AccountEvent {
     UUID getId();
     LocalDateTime getTimestamp();
+    EventMetadata getMetadata();
+    int getVersion();
 }

@@ -14,7 +14,11 @@ public class MoneyDepositedEvent extends AccountEventBase {
     }
     
     public MoneyDepositedEvent(final UUID accountId, final BigDecimal amount) {
-        super(accountId, LocalDateTime.now());
+        this(accountId, amount, new EventMetadata(1));
+    }
+    
+    public MoneyDepositedEvent(final UUID accountId, final BigDecimal amount, final EventMetadata metadata) {
+        super(accountId, LocalDateTime.now(), metadata);
         this.amount = amount;
     }
 

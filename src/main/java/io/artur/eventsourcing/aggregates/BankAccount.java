@@ -1,6 +1,10 @@
 package io.artur.eventsourcing.aggregates;
 
+import io.artur.eventsourcing.commands.DepositMoneyCommand;
+import io.artur.eventsourcing.commands.OpenAccountCommand;
+import io.artur.eventsourcing.commands.WithdrawMoneyCommand;
 import io.artur.eventsourcing.events.AccountEvent;
+import io.artur.eventsourcing.events.EventMetadata;
 import io.artur.eventsourcing.events.MoneyDepositedEvent;
 import io.artur.eventsourcing.events.MoneyWithdrawnEvent;
 import io.artur.eventsourcing.events.AccountOpenedEvent;
@@ -32,8 +36,12 @@ public class BankAccount {
     }
 
     public void apply(AccountEvent event) {
+        apply(event, true);
+    }
+    
+    private void apply(AccountEvent event, boolean saveToStore) {
         if (event instanceof AccountOpenedEvent openEvent) {
-            if (!eventStore.isEmpty(event.getId())) {
+            if (saveToStore && !eventStore.isEmpty(event.getId())) {
                 throw new IllegalStateException("Account already opened");
             }
             this.accountId = openEvent.getId();
@@ -46,7 +54,10 @@ public class BankAccount {
         } else {
             throw new IllegalArgumentException("Unsupported event type " + event.getClass().getName());
         }
-        eventStore.saveEvent(event.getId(), event);
+        
+        if (saveToStore) {
+            eventStore.saveEvent(event.getId(), event);
+        }
     }
 
     public List<AccountEvent> getEvents() {
@@ -58,16 +69,48 @@ public class BankAccount {
     }
     
     public void openAccount(final String accountHolder, final BigDecimal overdraftLimit) {
-        apply(new AccountOpenedEvent(UUID.randomUUID(), accountHolder, overdraftLimit));
+        openAccount(accountHolder, overdraftLimit, new EventMetadata(1));
+    }
+    
+    public void openAccount(final String accountHolder, final BigDecimal overdraftLimit, final EventMetadata metadata) {
+        UUID newAccountId = UUID.randomUUID();
+        OpenAccountCommand command = new OpenAccountCommand(newAccountId, accountHolder, overdraftLimit, metadata);
+        command.validate();
+        apply(new AccountOpenedEvent(newAccountId, accountHolder, overdraftLimit, metadata));
+    }
+    
+    public void handle(OpenAccountCommand command) {
+        command.validate();
+        apply(new AccountOpenedEvent(command.getAggregateId(), command.getAccountHolder(), 
+                command.getOverdraftLimit(), command.getMetadata()));
     }
 
     public BigDecimal deposit(final BigDecimal amount) {
-        apply(new MoneyDepositedEvent(this.accountId, amount));
+        return deposit(amount, new EventMetadata(1));
+    }
+    
+    public BigDecimal deposit(final BigDecimal amount, final EventMetadata metadata) {
+        DepositMoneyCommand command = new DepositMoneyCommand(this.accountId, amount, metadata);
+        command.validate();
+        apply(new MoneyDepositedEvent(this.accountId, amount, metadata));
         createSnapshotIfNeeded();
         return balance;
     }
+    
+    public void handle(DepositMoneyCommand command) {
+        command.validate();
+        apply(new MoneyDepositedEvent(command.getAggregateId(), command.getAmount(), command.getMetadata()));
+        createSnapshotIfNeeded();
+    }
 
     public BigDecimal withdraw(final BigDecimal amount) {
+        return withdraw(amount, new EventMetadata(1));
+    }
+    
+    public BigDecimal withdraw(final BigDecimal amount, final EventMetadata metadata) {
+        WithdrawMoneyCommand command = new WithdrawMoneyCommand(this.accountId, amount, metadata);
+        command.validate();
+        
         BigDecimal newBalance = this.balance.subtract(amount);
         BigDecimal minimumAllowedBalance = this.overdraftLimit.negate();
         
@@ -75,9 +118,23 @@ public class BankAccount {
             throw new OverdraftExceededException(this.balance, this.overdraftLimit, amount);
         }
         
-        apply(new MoneyWithdrawnEvent(this.accountId, amount));
+        apply(new MoneyWithdrawnEvent(this.accountId, amount, metadata));
         createSnapshotIfNeeded();
         return balance;
+    }
+    
+    public void handle(WithdrawMoneyCommand command) {
+        command.validate();
+        
+        BigDecimal newBalance = this.balance.subtract(command.getAmount());
+        BigDecimal minimumAllowedBalance = this.overdraftLimit.negate();
+        
+        if (newBalance.compareTo(minimumAllowedBalance) < 0) {
+            throw new OverdraftExceededException(this.balance, this.overdraftLimit, command.getAmount());
+        }
+        
+        apply(new MoneyWithdrawnEvent(command.getAggregateId(), command.getAmount(), command.getMetadata()));
+        createSnapshotIfNeeded();
     }
 
     private void createSnapshotIfNeeded() {
@@ -132,7 +189,7 @@ public class BankAccount {
                     .toList();
         }
 
-        eventsToApply.forEach(bankAccount::apply);
+        eventsToApply.forEach(event -> bankAccount.apply(event, false));
 
         return bankAccount;
     }

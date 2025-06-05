@@ -19,7 +19,11 @@ public class AccountOpenedEvent extends AccountEventBase {
     }
     
     public AccountOpenedEvent(UUID accountId, String accountHolder, BigDecimal overdraftLimit) {
-        super(accountId, LocalDateTime.now());
+        this(accountId, accountHolder, overdraftLimit, new EventMetadata(1));
+    }
+    
+    public AccountOpenedEvent(UUID accountId, String accountHolder, BigDecimal overdraftLimit, EventMetadata metadata) {
+        super(accountId, LocalDateTime.now(), metadata);
         this.accountHolder = accountHolder;
         this.overdraftLimit = overdraftLimit;
     }
