@@ -3,6 +3,9 @@ package io.artur.eventsourcing.aggregates;
 import io.artur.eventsourcing.commands.DepositMoneyCommand;
 import io.artur.eventsourcing.commands.OpenAccountCommand;
 import io.artur.eventsourcing.commands.WithdrawMoneyCommand;
+import io.artur.eventsourcing.domain.AccountHolder;
+import io.artur.eventsourcing.domain.AccountNumber;
+import io.artur.eventsourcing.domain.Money;
 import io.artur.eventsourcing.events.AccountEvent;
 import io.artur.eventsourcing.events.EventMetadata;
 import io.artur.eventsourcing.events.MoneyDepositedEvent;
@@ -23,6 +26,7 @@ public class BankAccount {
 
     private static final int MAX_TRANSACTIONS_BEFORE_SNAPSHOT = 10;
     private UUID accountId;
+    private AccountNumber accountNumber;
     private String accountHolder;
     private BigDecimal balance;
     private BigDecimal overdraftLimit;
@@ -45,6 +49,7 @@ public class BankAccount {
                 throw new IllegalStateException("Account already opened");
             }
             this.accountId = openEvent.getId();
+            this.accountNumber = AccountNumber.generate();
             this.accountHolder = openEvent.getAccountHolder();
             this.overdraftLimit = openEvent.getOverdraftLimit();
         } else if (event instanceof MoneyDepositedEvent depositEvent) {
@@ -149,6 +154,10 @@ public class BankAccount {
     public UUID getAccountId() {
         return this.accountId;
     }
+    
+    public AccountNumber getAccountNumber() {
+        return this.accountNumber;
+    }
 
     public String getAccountHolder() {
         return this.accountHolder;
@@ -158,8 +167,16 @@ public class BankAccount {
         return this.balance;
     }
     
+    public Money getBalanceAsMoney() {
+        return Money.of(this.balance);
+    }
+    
     public BigDecimal getOverdraftLimit() {
         return this.overdraftLimit;
+    }
+    
+    public Money getOverdraftLimitAsMoney() {
+        return Money.of(this.overdraftLimit);
     }
     
     public void setOverdraftLimit(final BigDecimal overdraftLimit) {
