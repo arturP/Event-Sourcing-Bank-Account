@@ -2,8 +2,11 @@ package io.artur.eventsourcing.api.controller;
 
 import io.artur.eventsourcing.aggregates.BankAccount;
 import io.artur.eventsourcing.api.dto.*;
+import io.artur.eventsourcing.commands.TransferMoneyCommand;
+import io.artur.eventsourcing.cqrs.handlers.TransferMoneyCommandHandler;
 import io.artur.eventsourcing.eventstores.EventStore;
 import io.artur.eventsourcing.events.AccountEvent;
+import io.artur.eventsourcing.events.EventMetadata;
 import io.artur.eventsourcing.metrics.PerformanceMetricsCollector;
 import io.artur.eventsourcing.repository.EventSourcingBankAccountRepository;
 import io.swagger.v3.oas.annotations.Operation;
@@ -32,6 +35,7 @@ public class AccountController {
     private final EventSourcingBankAccountRepository repository;
     private final EventStore<AccountEvent, UUID> eventStore;
     private final PerformanceMetricsCollector metricsCollector;
+    private final TransferMoneyCommandHandler transferHandler;
     
     public AccountController(EventSourcingBankAccountRepository repository,
                            EventStore<AccountEvent, UUID> eventStore,
@@ -39,6 +43,7 @@ public class AccountController {
         this.repository = repository;
         this.eventStore = eventStore;
         this.metricsCollector = metricsCollector;
+        this.transferHandler = new TransferMoneyCommandHandler(eventStore, repository);
     }
     
     @PostMapping
@@ -139,6 +144,64 @@ public class AccountController {
                 account.withdraw(amount);
                 metricsCollector.recordWithdrawal();
             });
+    }
+    
+    @PostMapping("/{accountId}/transfer")
+    @Operation(summary = "Transfer money", description = "Transfer money from this account to another account")
+    @PreAuthorize("hasRole('USER')")
+    public ResponseEntity<TransactionResponse> transfer(
+            @Parameter(description = "From Account ID") @PathVariable UUID accountId,
+            @Valid @RequestBody TransferRequest request) {
+        
+        return metricsCollector.recordCommandProcessing(() -> {
+            try {
+                TransferMoneyCommand command = new TransferMoneyCommand(
+                    accountId,
+                    request.getToAccountId(),
+                    request.getAmount(),
+                    request.getDescription(),
+                    new EventMetadata(1)
+                );
+                
+                // Get initial balance before transfer
+                Optional<BankAccount> fromAccountOpt = repository.findById(accountId);
+                if (fromAccountOpt.isEmpty()) {
+                    return ResponseEntity.notFound().build();
+                }
+                
+                transferHandler.handle(command);
+                
+                // Get updated balance after transfer
+                BankAccount fromAccountAfter = repository.findById(accountId).get();
+                
+                TransactionResponse response = new TransactionResponse(
+                    accountId,
+                    "TRANSFER",
+                    request.getAmount(),
+                    fromAccountAfter.getBalance(),
+                    request.getDescription(),
+                    LocalDateTime.now(),
+                    true,
+                    "Transfer successful to account " + request.getToAccountId()
+                );
+                
+                return ResponseEntity.ok(response);
+                
+            } catch (Exception e) {
+                TransactionResponse response = new TransactionResponse(
+                    accountId,
+                    "TRANSFER",
+                    request.getAmount(),
+                    null,
+                    request.getDescription(),
+                    LocalDateTime.now(),
+                    false,
+                    e.getMessage()
+                );
+                
+                return ResponseEntity.badRequest().body(response);
+            }
+        });
     }
     
     @GetMapping("/{accountId}/balance")

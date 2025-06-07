@@ -2,12 +2,15 @@ package io.artur.eventsourcing.aggregates;
 
 import io.artur.eventsourcing.commands.DepositMoneyCommand;
 import io.artur.eventsourcing.commands.OpenAccountCommand;
+import io.artur.eventsourcing.commands.TransferMoneyCommand;
 import io.artur.eventsourcing.commands.WithdrawMoneyCommand;
 import io.artur.eventsourcing.domain.AccountNumber;
 import io.artur.eventsourcing.domain.Money;
 import io.artur.eventsourcing.events.AccountEvent;
 import io.artur.eventsourcing.events.EventMetadata;
 import io.artur.eventsourcing.events.MoneyDepositedEvent;
+import io.artur.eventsourcing.events.MoneyReceivedEvent;
+import io.artur.eventsourcing.events.MoneyTransferredEvent;
 import io.artur.eventsourcing.events.MoneyWithdrawnEvent;
 import io.artur.eventsourcing.events.AccountOpenedEvent;
 import io.artur.eventsourcing.eventstores.EventStore;
@@ -55,6 +58,10 @@ public class BankAccount {
             this.balance = this.balance.add(depositEvent.getAmount());
         } else if (event instanceof MoneyWithdrawnEvent withdrawEvent) {
             this.balance = this.balance.subtract(withdrawEvent.getAmount());
+        } else if (event instanceof MoneyTransferredEvent transferEvent) {
+            this.balance = this.balance.subtract(transferEvent.getAmount());
+        } else if (event instanceof MoneyReceivedEvent receivedEvent) {
+            this.balance = this.balance.add(receivedEvent.getAmount());
         } else {
             throw new IllegalArgumentException("Unsupported event type " + event.getClass().getName());
         }
@@ -138,6 +145,26 @@ public class BankAccount {
         }
         
         apply(new MoneyWithdrawnEvent(command.getAggregateId(), command.getAmount(), command.getMetadata()));
+        createSnapshotIfNeeded();
+    }
+    
+    public void transferOut(final UUID toAccountId, final BigDecimal amount, final String description, final EventMetadata metadata) {
+        TransferMoneyCommand command = new TransferMoneyCommand(this.accountId, toAccountId, amount, description, metadata);
+        command.validate();
+        
+        BigDecimal newBalance = this.balance.subtract(amount);
+        BigDecimal minimumAllowedBalance = this.overdraftLimit.negate();
+        
+        if (newBalance.compareTo(minimumAllowedBalance) < 0) {
+            throw new OverdraftExceededException(this.balance, this.overdraftLimit, amount);
+        }
+        
+        apply(new MoneyTransferredEvent(this.accountId, toAccountId, amount, description, metadata));
+        createSnapshotIfNeeded();
+    }
+    
+    public void receiveTransfer(final UUID fromAccountId, final BigDecimal amount, final String description, final EventMetadata metadata) {
+        apply(new MoneyReceivedEvent(this.accountId, fromAccountId, amount, description, metadata));
         createSnapshotIfNeeded();
     }
 
