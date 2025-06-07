@@ -17,9 +17,9 @@ import java.math.BigDecimal;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-// @SpringBootTest(classes = EventSourcingBankAccountApplication.class)
-// @AutoConfigureMockMvc
-// @ActiveProfiles("test")
+@SpringBootTest(classes = EventSourcingBankAccountApplication.class, webEnvironment = SpringBootTest.WebEnvironment.MOCK)
+@AutoConfigureMockMvc
+@ActiveProfiles("test") 
 class BankAccountApiIntegrationTest {
 
     @Autowired
@@ -47,7 +47,7 @@ class BankAccountApiIntegrationTest {
         jwtToken = authResponse.getToken();
     }
 
-    // @Test
+    @Test
     void testHealthEndpoint() throws Exception {
         mockMvc.perform(get("/api/health"))
                 .andExpect(status().isOk())
