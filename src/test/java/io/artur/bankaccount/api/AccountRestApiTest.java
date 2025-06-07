@@ -9,8 +9,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.math.BigDecimal;
@@ -26,7 +28,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * REST API tests for Account Controller using MockMvc
  * Tests the web layer without full application context startup
  */
-@WebMvcTest(AccountController.class)
+@WebMvcTest(controllers = AccountController.class)
+@TestPropertySource(properties = {
+    "bankaccount.infrastructure.native.enabled=false"
+})
+@AutoConfigureMockMvc(addFilters = false)
 class AccountRestApiTest {
     
     @Autowired
