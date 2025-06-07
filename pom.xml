@@ -44,6 +44,11 @@
       <artifactId>spring-boot-starter-actuator</artifactId>
       <version>${spring.boot.version}</version>
     </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-jdbc</artifactId>
+      <version>${spring.boot.version}</version>
+    </dependency>
     
     <!-- JDBC Driver and Connection Pool -->
     <dependency>
@@ -109,9 +114,9 @@
     
     <!-- Logging -->
     <dependency>
-      <groupId>ch.qos.logback</groupId>
-      <artifactId>logback-classic</artifactId>
-      <version>1.4.14</version>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-logging</artifactId>
+      <version>${spring.boot.version}</version>
     </dependency>
     
     <!-- Caching -->
