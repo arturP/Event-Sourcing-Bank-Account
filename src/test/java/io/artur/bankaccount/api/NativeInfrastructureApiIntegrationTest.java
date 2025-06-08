@@ -20,6 +20,8 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import javax.sql.DataSource;
+import java.sql.Connection;
+import java.sql.Statement;
 import java.util.UUID;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
@@ -68,7 +70,32 @@ class NativeInfrastructureApiIntegrationTest {
         dataSource.setUsername("sa");
         dataSource.setPassword("");
         dataSource.setDriverClassName("org.h2.Driver");
+        
+        // Initialize database schema
+        initializeSchema(dataSource);
+        
         return dataSource;
+    }
+    
+    private void initializeSchema(DataSource dataSource) {
+        String createEventsTable = """
+            CREATE TABLE IF NOT EXISTS events (
+                event_id BIGINT AUTO_INCREMENT PRIMARY KEY,
+                aggregate_id VARCHAR(36) NOT NULL,
+                event_type VARCHAR(100) NOT NULL,
+                event_data CLOB NOT NULL,
+                event_version BIGINT NOT NULL,
+                created_at TIMESTAMP NOT NULL,
+                correlation_id VARCHAR(36)
+            )
+            """;
+        
+        try (Connection conn = dataSource.getConnection();
+             Statement stmt = conn.createStatement()) {
+            stmt.execute(createEventsTable);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to initialize database schema", e);
+        }
     }
     
     @Test
@@ -166,7 +193,7 @@ class NativeInfrastructureApiIntegrationTest {
         // Create first account
         String createAccount1Request = """
             {
-                "accountHolderName": "Alice",
+                "accountHolderName": "Alice Smith",
                 "overdraftLimit": 100.00
             }
             """;
@@ -174,6 +201,11 @@ class NativeInfrastructureApiIntegrationTest {
         String response1 = mockMvc.perform(post("/api/accounts")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(createAccount1Request))
+                .andDo(result -> {
+                    System.out.println("Response status: " + result.getResponse().getStatus());
+                    System.out.println("Response body: " + result.getResponse().getContentAsString());
+                    System.out.println("Response headers: " + result.getResponse().getHeaderNames());
+                })
                 .andExpect(status().isCreated())
                 .andReturn()
                 .getResponse()
@@ -184,7 +216,7 @@ class NativeInfrastructureApiIntegrationTest {
         // Create second account
         String createAccount2Request = """
             {
-                "accountHolderName": "Bob",
+                "accountHolderName": "Bob Johnson",
                 "overdraftLimit": 200.00
             }
             """;
