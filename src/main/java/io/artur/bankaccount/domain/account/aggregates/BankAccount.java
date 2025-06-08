@@ -4,6 +4,7 @@ import io.artur.bankaccount.domain.account.events.*;
 import io.artur.bankaccount.domain.account.exceptions.OverdraftExceededException;
 import io.artur.bankaccount.domain.account.valueobjects.AccountHolder;
 import io.artur.bankaccount.domain.account.valueobjects.AccountNumber;
+import io.artur.bankaccount.domain.account.valueobjects.AccountStatus;
 import io.artur.bankaccount.domain.shared.events.EventMetadata;
 import io.artur.bankaccount.domain.shared.valueobjects.Money;
 
@@ -19,6 +20,7 @@ public class BankAccount {
     private AccountHolder accountHolder;
     private Money balance;
     private Money overdraftLimit;
+    private AccountStatus accountStatus;
     private List<AccountDomainEvent> uncommittedEvents;
     
     public BankAccount() {
@@ -64,6 +66,8 @@ public class BankAccount {
             throw new IllegalArgumentException("Deposit amount must be positive");
         }
         
+        validateAccountCanPerformTransactions();
+        
         MoneyDepositedEvent event = new MoneyDepositedEvent(this.accountId, amount, metadata);
         apply(event);
     }
@@ -72,6 +76,8 @@ public class BankAccount {
         if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
             throw new IllegalArgumentException("Withdrawal amount must be positive");
         }
+        
+        validateAccountCanPerformTransactions();
         
         BigDecimal newBalance = this.balance.getAmount().subtract(amount);
         BigDecimal minimumAllowedBalance = this.overdraftLimit.getAmount().negate();
@@ -94,6 +100,8 @@ public class BankAccount {
         if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
             throw new IllegalArgumentException("Transfer amount must be positive");
         }
+        
+        validateAccountCanPerformTransactions();
         
         BigDecimal newBalance = this.balance.getAmount().subtract(amount);
         BigDecimal minimumAllowedBalance = this.overdraftLimit.getAmount().negate();
@@ -128,6 +136,7 @@ public class BankAccount {
             this.accountNumber = AccountNumber.generate();
             this.accountHolder = AccountHolder.of(openEvent.getAccountHolder());
             this.overdraftLimit = Money.of(openEvent.getOverdraftLimit());
+            this.accountStatus = AccountStatus.createActive("SYSTEM");
         } else if (event instanceof MoneyDepositedEvent depositEvent) {
             this.balance = this.balance.add(Money.of(depositEvent.getAmount()));
         } else if (event instanceof MoneyWithdrawnEvent withdrawEvent) {
@@ -136,6 +145,14 @@ public class BankAccount {
             this.balance = this.balance.subtract(Money.of(transferEvent.getAmount()));
         } else if (event instanceof MoneyReceivedEvent receivedEvent) {
             this.balance = this.balance.add(Money.of(receivedEvent.getAmount()));
+        } else if (event instanceof AccountFrozenEvent frozenEvent) {
+            this.accountStatus = AccountStatus.createFrozen(frozenEvent.getReason(), frozenEvent.getFrozenBy());
+        } else if (event instanceof AccountClosedEvent closedEvent) {
+            this.accountStatus = AccountStatus.createClosed(closedEvent.getReason(), closedEvent.getClosedBy());
+        } else if (event instanceof AccountReactivatedEvent reactivatedEvent) {
+            this.accountStatus = AccountStatus.createActive(reactivatedEvent.getReactivatedBy());
+        } else if (event instanceof AccountMarkedDormantEvent dormantEvent) {
+            this.accountStatus = AccountStatus.createDormant(dormantEvent.getMarkedBy());
         } else {
             throw new IllegalArgumentException("Unsupported event type " + event.getClass().getName());
         }
@@ -175,5 +192,92 @@ public class BankAccount {
     
     public void setOverdraftLimit(Money overdraftLimit) {
         this.overdraftLimit = overdraftLimit;
+    }
+    
+    // Account Lifecycle Management Methods
+    
+    public void freeze(String reason, String frozenBy, EventMetadata metadata) {
+        if (reason == null || reason.trim().isEmpty()) {
+            throw new IllegalArgumentException("Freeze reason cannot be null or empty");
+        }
+        if (frozenBy == null || frozenBy.trim().isEmpty()) {
+            throw new IllegalArgumentException("Frozen by cannot be null or empty");
+        }
+        
+        if (this.accountStatus != null && !this.accountStatus.getStatus().canBeFrozen()) {
+            throw new IllegalStateException(
+                String.format("Cannot freeze account with status %s", this.accountStatus.getStatus())
+            );
+        }
+        
+        AccountFrozenEvent event = new AccountFrozenEvent(this.accountId, reason, frozenBy, metadata);
+        apply(event);
+    }
+    
+    public void close(String reason, String closedBy, EventMetadata metadata) {
+        if (reason == null || reason.trim().isEmpty()) {
+            throw new IllegalArgumentException("Close reason cannot be null or empty");
+        }
+        if (closedBy == null || closedBy.trim().isEmpty()) {
+            throw new IllegalArgumentException("Closed by cannot be null or empty");
+        }
+        
+        if (this.accountStatus != null && !this.accountStatus.getStatus().canBeClosed()) {
+            throw new IllegalStateException(
+                String.format("Cannot close account with status %s", this.accountStatus.getStatus())
+            );
+        }
+        
+        AccountClosedEvent event = new AccountClosedEvent(this.accountId, reason, closedBy, this.balance, metadata);
+        apply(event);
+    }
+    
+    public void reactivate(String reason, String reactivatedBy, EventMetadata metadata) {
+        if (reason == null || reason.trim().isEmpty()) {
+            throw new IllegalArgumentException("Reactivation reason cannot be null or empty");
+        }
+        if (reactivatedBy == null || reactivatedBy.trim().isEmpty()) {
+            throw new IllegalArgumentException("Reactivated by cannot be null or empty");
+        }
+        
+        if (this.accountStatus == null || !this.accountStatus.getStatus().canBeReactivated()) {
+            throw new IllegalStateException(
+                String.format("Cannot reactivate account with status %s", 
+                    this.accountStatus != null ? this.accountStatus.getStatus() : "null")
+            );
+        }
+        
+        String previousStatus = this.accountStatus.getStatus().name();
+        AccountReactivatedEvent event = new AccountReactivatedEvent(this.accountId, reason, reactivatedBy, previousStatus, metadata);
+        apply(event);
+    }
+    
+    public void markDormant(String reason, String markedBy, EventMetadata metadata) {
+        if (reason == null || reason.trim().isEmpty()) {
+            throw new IllegalArgumentException("Dormant reason cannot be null or empty");
+        }
+        if (markedBy == null || markedBy.trim().isEmpty()) {
+            throw new IllegalArgumentException("Marked by cannot be null or empty");
+        }
+        
+        if (this.accountStatus != null && this.accountStatus.getStatus() == AccountStatus.Status.CLOSED) {
+            throw new IllegalStateException("Cannot mark closed account as dormant");
+        }
+        
+        AccountMarkedDormantEvent event = new AccountMarkedDormantEvent(this.accountId, reason, markedBy, null, metadata);
+        apply(event);
+    }
+    
+    private void validateAccountCanPerformTransactions() {
+        if (this.accountStatus == null || !this.accountStatus.canPerformTransactions()) {
+            String status = this.accountStatus != null ? this.accountStatus.getStatus().name() : "UNKNOWN";
+            throw new IllegalStateException(
+                String.format("Account with status %s cannot perform transactions", status)
+            );
+        }
+    }
+    
+    public AccountStatus getAccountStatus() {
+        return this.accountStatus;
     }
 }

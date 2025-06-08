@@ -129,6 +129,13 @@ public class NativeMetricsCollector implements MetricsPort {
     }
     
     @Override
+    public void recordAccountStatusChange(String newStatus) {
+        logger.info("Account status changed to: {}", newStatus);
+        // You could add specific metrics tracking here if needed
+        recordCustomMetric("account_status_changes", 1);
+    }
+    
+    @Override
     public void recordCacheHit(String cacheType) {
         cacheHits.incrementAndGet();
         logger.debug("Cache hit recorded for type: {}. Total hits: {}", cacheType, cacheHits.get());

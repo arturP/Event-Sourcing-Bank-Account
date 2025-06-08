@@ -4,10 +4,16 @@ import io.artur.bankaccount.api.dto.CreateAccountRequest;
 import io.artur.bankaccount.api.dto.AccountResponse;
 import io.artur.bankaccount.api.dto.TransactionRequest;
 import io.artur.bankaccount.api.dto.TransactionResponse;
+import io.artur.bankaccount.api.dto.AccountLifecycleRequest;
+import io.artur.bankaccount.api.dto.AccountLifecycleResponse;
 import io.artur.bankaccount.application.commands.models.DepositMoneyCommand;
 import io.artur.bankaccount.application.commands.models.OpenAccountCommand;
 import io.artur.bankaccount.application.commands.models.WithdrawMoneyCommand;
 import io.artur.bankaccount.application.commands.models.TransferMoneyCommand;
+import io.artur.bankaccount.application.commands.models.FreezeAccountCommand;
+import io.artur.bankaccount.application.commands.models.CloseAccountCommand;
+import io.artur.bankaccount.application.commands.models.ReactivateAccountCommand;
+import io.artur.bankaccount.application.commands.models.MarkAccountDormantCommand;
 import io.artur.bankaccount.application.services.AccountApplicationService;
 import io.artur.bankaccount.domain.account.aggregates.BankAccount;
 import io.artur.bankaccount.domain.shared.events.EventMetadata;
@@ -178,6 +184,116 @@ public class AccountController {
                 e.getMessage(),
                 request.getAmount()
             );
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+        }
+    }
+    
+    // Account Lifecycle Management Endpoints
+    
+    @PostMapping("/{accountId}/freeze")
+    public ResponseEntity<AccountLifecycleResponse> freezeAccount(
+            @PathVariable UUID accountId,
+            @RequestBody AccountLifecycleRequest request) {
+        try {
+            EventMetadata metadata = new EventMetadata((int) (System.currentTimeMillis() % Integer.MAX_VALUE));
+            FreezeAccountCommand command = new FreezeAccountCommand(
+                accountId,
+                request.getReason(),
+                request.getPerformedBy(),
+                metadata
+            );
+            
+            applicationService.freezeAccount(command);
+            
+            AccountLifecycleResponse response = AccountLifecycleResponse.success(
+                accountId, "FROZEN", request.getReason(), request.getPerformedBy()
+            );
+            
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            AccountLifecycleResponse response = AccountLifecycleResponse.failure(accountId, e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+        }
+    }
+    
+    @PostMapping("/{accountId}/close")
+    public ResponseEntity<AccountLifecycleResponse> closeAccount(
+            @PathVariable UUID accountId,
+            @RequestBody AccountLifecycleRequest request) {
+        try {
+            EventMetadata metadata = new EventMetadata((int) (System.currentTimeMillis() % Integer.MAX_VALUE));
+            CloseAccountCommand command = new CloseAccountCommand(
+                accountId,
+                request.getReason(),
+                request.getPerformedBy(),
+                metadata
+            );
+            
+            applicationService.closeAccount(command);
+            
+            AccountLifecycleResponse response = AccountLifecycleResponse.success(
+                accountId, "CLOSED", request.getReason(), request.getPerformedBy()
+            );
+            
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            AccountLifecycleResponse response = AccountLifecycleResponse.failure(accountId, e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+        }
+    }
+    
+    @PostMapping("/{accountId}/reactivate")
+    public ResponseEntity<AccountLifecycleResponse> reactivateAccount(
+            @PathVariable UUID accountId,
+            @RequestBody AccountLifecycleRequest request) {
+        try {
+            EventMetadata metadata = new EventMetadata((int) (System.currentTimeMillis() % Integer.MAX_VALUE));
+            ReactivateAccountCommand command = new ReactivateAccountCommand(
+                accountId,
+                request.getReason(),
+                request.getPerformedBy(),
+                metadata
+            );
+            
+            applicationService.reactivateAccount(command);
+            
+            AccountLifecycleResponse response = AccountLifecycleResponse.success(
+                accountId, "ACTIVE", request.getReason(), request.getPerformedBy()
+            );
+            
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            AccountLifecycleResponse response = AccountLifecycleResponse.failure(accountId, e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+        }
+    }
+    
+    @PostMapping("/{accountId}/mark-dormant")
+    public ResponseEntity<AccountLifecycleResponse> markAccountDormant(
+            @PathVariable UUID accountId,
+            @RequestBody AccountLifecycleRequest request) {
+        try {
+            EventMetadata metadata = new EventMetadata((int) (System.currentTimeMillis() % Integer.MAX_VALUE));
+            MarkAccountDormantCommand command = new MarkAccountDormantCommand(
+                accountId,
+                request.getReason(),
+                request.getPerformedBy(),
+                metadata
+            );
+            
+            applicationService.markAccountDormant(command);
+            
+            AccountLifecycleResponse response = AccountLifecycleResponse.success(
+                accountId, "DORMANT", request.getReason(), request.getPerformedBy()
+            );
+            
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            AccountLifecycleResponse response = AccountLifecycleResponse.failure(accountId, e.getMessage());
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
         }
     }

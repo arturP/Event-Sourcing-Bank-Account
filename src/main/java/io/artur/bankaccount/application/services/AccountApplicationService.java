@@ -215,4 +215,86 @@ public class AccountApplicationService implements AccountManagementUseCase, Acco
             operation.run();
         }
     }
+    
+    // Account Lifecycle Management Methods
+    
+    public void freezeAccount(FreezeAccountCommand command) {
+        recordMetrics(() -> {
+            command.validate();
+            
+            BankAccount account = loadAccount(command.getAccountId());
+            account.freeze(command.getReason(), command.getFrozenBy(), command.getMetadata());
+            accountRepository.save(account);
+            
+            // Invalidate cache entries for frozen account
+            if (cachePort != null) {
+                cachePort.invalidateAccount(account.getAccountId());
+            }
+            
+            // Record business metric
+            if (metricsPort != null) {
+                metricsPort.recordAccountStatusChange("FROZEN");
+            }
+        });
+    }
+    
+    public void closeAccount(CloseAccountCommand command) {
+        recordMetrics(() -> {
+            command.validate();
+            
+            BankAccount account = loadAccount(command.getAccountId());
+            account.close(command.getReason(), command.getClosedBy(), command.getMetadata());
+            accountRepository.save(account);
+            
+            // Invalidate cache entries for closed account
+            if (cachePort != null) {
+                cachePort.invalidateAccount(account.getAccountId());
+            }
+            
+            // Record business metric
+            if (metricsPort != null) {
+                metricsPort.recordAccountStatusChange("CLOSED");
+            }
+        });
+    }
+    
+    public void reactivateAccount(ReactivateAccountCommand command) {
+        recordMetrics(() -> {
+            command.validate();
+            
+            BankAccount account = loadAccount(command.getAccountId());
+            account.reactivate(command.getReason(), command.getReactivatedBy(), command.getMetadata());
+            accountRepository.save(account);
+            
+            // Invalidate cache entries for reactivated account
+            if (cachePort != null) {
+                cachePort.invalidateAccount(account.getAccountId());
+            }
+            
+            // Record business metric
+            if (metricsPort != null) {
+                metricsPort.recordAccountStatusChange("ACTIVE");
+            }
+        });
+    }
+    
+    public void markAccountDormant(MarkAccountDormantCommand command) {
+        recordMetrics(() -> {
+            command.validate();
+            
+            BankAccount account = loadAccount(command.getAccountId());
+            account.markDormant(command.getReason(), command.getMarkedBy(), command.getMetadata());
+            accountRepository.save(account);
+            
+            // Invalidate cache entries for dormant account
+            if (cachePort != null) {
+                cachePort.invalidateAccount(account.getAccountId());
+            }
+            
+            // Record business metric
+            if (metricsPort != null) {
+                metricsPort.recordAccountStatusChange("DORMANT");
+            }
+        });
+    }
 }

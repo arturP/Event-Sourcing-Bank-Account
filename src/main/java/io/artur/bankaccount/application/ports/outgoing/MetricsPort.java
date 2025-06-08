@@ -43,6 +43,7 @@ public interface MetricsPort {
     void recordWithdrawal();
     void recordTransfer();
     void recordOverdraftAttempt();
+    void recordAccountStatusChange(String newStatus);
     
     /**
      * Custom timing operations
