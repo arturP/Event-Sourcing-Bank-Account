@@ -1,0 +1,81 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bank-account-app
+  namespace: bank-account
+  labels:
+    app: bank-account-app
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: bank-account-app
+  template:
+    metadata:
+      labels:
+        app: bank-account-app
+    spec:
+      containers:
+      - name: bank-account-app
+        image: ghcr.io/your-username/event-sourcing-bank-account:latest
+        ports:
+        - containerPort: 8080
+        env:
+        - name: SPRING_PROFILES_ACTIVE
+          value: "prod"
+        - name: SPRING_DATASOURCE_URL
+          value: "jdbc:postgresql://postgres-service:5432/bankaccount"
+        - name: SPRING_DATASOURCE_USERNAME
+          value: "bankuser"
+        - name: SPRING_DATASOURCE_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: bank-account-secrets
+              key: DB_PASSWORD
+        - name: ADMIN_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: bank-account-secrets
+              key: ADMIN_PASSWORD
+        - name: SPRING_REDIS_HOST
+          value: "redis-service"
+        - name: SPRING_REDIS_PORT
+          value: "6379"
+        - name: JAVA_OPTS
+          value: "-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -XX:+UseG1GC"
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /actuator/health/liveness
+            port: 8080
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /actuator/health/readiness
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3
+        volumeMounts:
+        - name: config-volume
+          mountPath: /app/config
+        - name: logs-volume
+          mountPath: /app/logs
+      volumes:
+      - name: config-volume
+        configMap:
+          name: bank-account-config
+      - name: logs-volume
+        emptyDir: {}
+      imagePullSecrets:
+      - name: ghcr-secret
