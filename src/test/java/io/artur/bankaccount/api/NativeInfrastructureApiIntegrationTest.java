@@ -6,6 +6,10 @@ import io.artur.bankaccount.application.ports.outgoing.CachePort;
 import io.artur.bankaccount.application.ports.outgoing.EventStorePort;
 import io.artur.bankaccount.application.ports.outgoing.MetricsPort;
 import io.artur.bankaccount.application.services.AccountApplicationService;
+import io.artur.bankaccount.application.queries.handlers.AccountQueryHandler;
+import io.artur.bankaccount.application.queries.handlers.TransactionQueryHandler;
+import io.artur.bankaccount.infrastructure.persistence.queries.NativeAccountSummaryQueryRepository;
+import io.artur.bankaccount.infrastructure.persistence.queries.NativeTransactionHistoryQueryRepository;
 import io.artur.bankaccount.infrastructure.monitoring.NativeMetricsCollector;
 import io.artur.bankaccount.infrastructure.persistence.cache.NativeCacheService;
 import io.artur.bankaccount.infrastructure.persistence.eventstore.NativeEventStore;
@@ -56,8 +60,14 @@ class NativeInfrastructureApiIntegrationTest {
         // Create application service with native infrastructure
         applicationService = new AccountApplicationService(accountRepository, cachePort, metricsPort);
         
+        // Create query repositories and handlers
+        NativeAccountSummaryQueryRepository accountSummaryRepo = new NativeAccountSummaryQueryRepository();
+        NativeTransactionHistoryQueryRepository transactionRepo = new NativeTransactionHistoryQueryRepository();
+        AccountQueryHandler accountQueryHandler = new AccountQueryHandler(accountSummaryRepo);
+        TransactionQueryHandler transactionQueryHandler = new TransactionQueryHandler(transactionRepo);
+        
         // Create controller and MockMvc
-        AccountController controller = new AccountController(applicationService);
+        AccountController controller = new AccountController(applicationService, accountQueryHandler, transactionQueryHandler);
         mockMvc = MockMvcBuilders.standaloneSetup(controller).build();
         objectMapper = new ObjectMapper();
     }
@@ -113,7 +123,8 @@ class NativeInfrastructureApiIntegrationTest {
                 .content(createAccountRequest))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.accountHolderName").value("Integration Test User"))
-                .andExpect(jsonPath("$.balance").value(500.0)) // Initial overdraft limit as balance
+                .andExpect(jsonPath("$.balance").value(500)) // Controller sets initial balance to overdraft limit
+                .andExpect(jsonPath("$.availableBalance").value(500)) // Available balance equals overdraft limit
                 .andReturn()
                 .getResponse()
                 .getContentAsString();
@@ -126,8 +137,8 @@ class NativeInfrastructureApiIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.accountId").value(accountId.toString()))
                 .andExpect(jsonPath("$.accountHolderName").value("Integration Test User"))
-                .andExpect(jsonPath("$.balance").value(0.0)) // Actual balance should be 0
-                .andExpect(jsonPath("$.availableBalance").value(500.0)); // Available = balance + overdraft
+                .andExpect(jsonPath("$.balance").value(0)) // Actual balance should be 0
+                .andExpect(jsonPath("$.availableBalance").value(500)); // Available = balance + overdraft
         
         // Step 3: Make a deposit
         String depositRequest = """
@@ -142,13 +153,13 @@ class NativeInfrastructureApiIntegrationTest {
                 .content(depositRequest))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("SUCCESS"))
-                .andExpect(jsonPath("$.amount").value(1000.0));
+                .andExpect(jsonPath("$.amount").value(1000));
         
         // Step 4: Verify balance after deposit
         mockMvc.perform(get("/api/accounts/{accountId}", accountId))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.balance").value(1000.0))
-                .andExpect(jsonPath("$.availableBalance").value(1500.0)); // 1000 + 500 overdraft
+                .andExpect(jsonPath("$.balance").value(1000))
+                .andExpect(jsonPath("$.availableBalance").value(1500)); // 1000 + 500 overdraft
         
         // Step 5: Make a withdrawal
         String withdrawalRequest = """
@@ -163,13 +174,13 @@ class NativeInfrastructureApiIntegrationTest {
                 .content(withdrawalRequest))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("SUCCESS"))
-                .andExpect(jsonPath("$.amount").value(300.0));
+                .andExpect(jsonPath("$.amount").value(300));
         
         // Step 6: Verify balance after withdrawal
         mockMvc.perform(get("/api/accounts/{accountId}", accountId))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.balance").value(700.0))
-                .andExpect(jsonPath("$.availableBalance").value(1200.0)); // 700 + 500 overdraft
+                .andExpect(jsonPath("$.balance").value(700))
+                .andExpect(jsonPath("$.availableBalance").value(1200)); // 700 + 500 overdraft
         
         // Step 7: Verify events were persisted correctly
         assert eventStorePort.hasEvents(accountId) : "Account should have events";
@@ -257,16 +268,16 @@ class NativeInfrastructureApiIntegrationTest {
                 .content(transferRequest))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("SUCCESS"))
-                .andExpect(jsonPath("$.amount").value(150.0));
+                .andExpect(jsonPath("$.amount").value(150));
         
         // Verify balances after transfer
         mockMvc.perform(get("/api/accounts/{accountId}", accountId1))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.balance").value(350.0)); // 500 - 150
+                .andExpect(jsonPath("$.balance").value(350)); // 500 - 150
         
         mockMvc.perform(get("/api/accounts/{accountId}", accountId2))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.balance").value(150.0)); // 0 + 150
+                .andExpect(jsonPath("$.balance").value(150)); // 0 + 150
         
         // Verify event persistence for both accounts
         assert eventStorePort.getEventCount(accountId1) == 3 : "Account 1 should have 3 events (open, deposit, transfer-out)";
@@ -299,6 +310,7 @@ class NativeInfrastructureApiIntegrationTest {
         UUID accountId = UUID.fromString(objectMapper.readTree(response).get("accountId").asText());
         
         // Test: Withdraw more than available balance (should exceed overdraft)
+        // Account has 0 balance + 50 overdraft = 50 available, trying to withdraw 100 should fail
         String excessiveWithdrawalRequest = """
             {
                 "amount": 100.00,

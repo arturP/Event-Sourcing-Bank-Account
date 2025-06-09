@@ -2,6 +2,8 @@ package io.artur.bankaccount.api;
 
 import io.artur.bankaccount.api.controller.AccountController;
 import io.artur.bankaccount.application.services.AccountApplicationService;
+import io.artur.bankaccount.application.queries.handlers.AccountQueryHandler;
+import io.artur.bankaccount.application.queries.handlers.TransactionQueryHandler;
 import io.artur.bankaccount.domain.account.aggregates.BankAccount;
 import io.artur.bankaccount.domain.shared.events.EventMetadata;
 import io.artur.bankaccount.domain.shared.valueobjects.Money;
@@ -44,6 +46,12 @@ class AccountRestApiTest {
     @MockBean
     private AccountApplicationService applicationService;
     
+    @MockBean
+    private AccountQueryHandler accountQueryHandler;
+    
+    @MockBean
+    private TransactionQueryHandler transactionQueryHandler;
+    
     @Test
     void shouldCreateAccountSuccessfully() throws Exception {
         // Given
@@ -65,8 +73,8 @@ class AccountRestApiTest {
                 .andExpect(content().contentType(MediaType.APPLICATION_JSON))
                 .andExpect(jsonPath("$.accountId").value(accountId.toString()))
                 .andExpect(jsonPath("$.accountHolderName").value("John Doe"))
-                .andExpect(jsonPath("$.balance").value(1000.00))
-                .andExpect(jsonPath("$.availableBalance").value(1000.00));
+                .andExpect(jsonPath("$.balance").value(1000))
+                .andExpect(jsonPath("$.availableBalance").value(1000));
         
         verify(applicationService).openAccount(any());
     }
@@ -93,8 +101,8 @@ class AccountRestApiTest {
                 .andExpect(content().contentType(MediaType.APPLICATION_JSON))
                 .andExpect(jsonPath("$.accountId").value(accountId.toString()))
                 .andExpect(jsonPath("$.accountHolderName").value("Jane Smith"))
-                .andExpect(jsonPath("$.balance").value(250.0))
-                .andExpect(jsonPath("$.availableBalance").value(750.0)); // 250 + 500 overdraft
+                .andExpect(jsonPath("$.balance").value(250))
+                .andExpect(jsonPath("$.availableBalance").value(750)); // 250 + 500 overdraft
         
         verify(applicationService).findAccountById(accountId);
     }
@@ -133,7 +141,7 @@ class AccountRestApiTest {
                 .andExpect(content().contentType(MediaType.APPLICATION_JSON))
                 .andExpect(jsonPath("$.status").value("SUCCESS"))
                 .andExpect(jsonPath("$.message").value("Deposit completed successfully"))
-                .andExpect(jsonPath("$.amount").value(150.0));
+                .andExpect(jsonPath("$.amount").value(150));
         
         verify(applicationService).deposit(any());
     }
@@ -159,7 +167,7 @@ class AccountRestApiTest {
                 .andExpect(content().contentType(MediaType.APPLICATION_JSON))
                 .andExpect(jsonPath("$.status").value("SUCCESS"))
                 .andExpect(jsonPath("$.message").value("Withdrawal completed successfully"))
-                .andExpect(jsonPath("$.amount").value(75.0));
+                .andExpect(jsonPath("$.amount").value(75));
         
         verify(applicationService).withdraw(any());
     }
@@ -185,7 +193,7 @@ class AccountRestApiTest {
                 .andExpect(content().contentType(MediaType.APPLICATION_JSON))
                 .andExpect(jsonPath("$.status").value("FAILED"))
                 .andExpect(jsonPath("$.message").value("Insufficient funds"))
-                .andExpect(jsonPath("$.amount").value(1000.0));
+                .andExpect(jsonPath("$.amount").value(1000));
         
         verify(applicationService).withdraw(any());
     }
@@ -212,7 +220,7 @@ class AccountRestApiTest {
                 .andExpect(content().contentType(MediaType.APPLICATION_JSON))
                 .andExpect(jsonPath("$.status").value("SUCCESS"))
                 .andExpect(jsonPath("$.message").value("Transfer completed successfully"))
-                .andExpect(jsonPath("$.amount").value(200.0));
+                .andExpect(jsonPath("$.amount").value(200));
         
         verify(applicationService).transfer(any());
     }
@@ -239,7 +247,7 @@ class AccountRestApiTest {
                 .andExpect(content().contentType(MediaType.APPLICATION_JSON))
                 .andExpect(jsonPath("$.status").value("FAILED"))
                 .andExpect(jsonPath("$.message").value("Account not found"))
-                .andExpect(jsonPath("$.amount").value(100.0));
+                .andExpect(jsonPath("$.amount").value(100));
         
         verify(applicationService).transfer(any());
     }

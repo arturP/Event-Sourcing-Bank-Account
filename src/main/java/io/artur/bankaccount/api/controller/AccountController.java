@@ -6,6 +6,11 @@ import io.artur.bankaccount.api.dto.TransactionRequest;
 import io.artur.bankaccount.api.dto.TransactionResponse;
 import io.artur.bankaccount.api.dto.AccountLifecycleRequest;
 import io.artur.bankaccount.api.dto.AccountLifecycleResponse;
+import io.artur.bankaccount.api.dto.AccountSummaryResponse;
+import io.artur.bankaccount.api.dto.TransactionHistoryResponse;
+import io.artur.bankaccount.api.dto.PagedResponse;
+import io.artur.bankaccount.api.dto.AccountStatisticsResponse;
+import io.artur.bankaccount.api.dto.TransactionStatisticsResponse;
 import io.artur.bankaccount.application.commands.models.DepositMoneyCommand;
 import io.artur.bankaccount.application.commands.models.OpenAccountCommand;
 import io.artur.bankaccount.application.commands.models.WithdrawMoneyCommand;
@@ -15,6 +20,11 @@ import io.artur.bankaccount.application.commands.models.CloseAccountCommand;
 import io.artur.bankaccount.application.commands.models.ReactivateAccountCommand;
 import io.artur.bankaccount.application.commands.models.MarkAccountDormantCommand;
 import io.artur.bankaccount.application.services.AccountApplicationService;
+import io.artur.bankaccount.application.queries.handlers.AccountQueryHandler;
+import io.artur.bankaccount.application.queries.handlers.TransactionQueryHandler;
+import io.artur.bankaccount.application.queries.models.AccountSearchQuery;
+import io.artur.bankaccount.application.queries.models.AccountSummaryQuery;
+import io.artur.bankaccount.application.queries.models.TransactionHistoryQuery;
 import io.artur.bankaccount.domain.account.aggregates.BankAccount;
 import io.artur.bankaccount.domain.shared.events.EventMetadata;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -31,10 +41,16 @@ import java.util.UUID;
 public class AccountController {
     
     private final AccountApplicationService applicationService;
+    private final AccountQueryHandler accountQueryHandler;
+    private final TransactionQueryHandler transactionQueryHandler;
     
     @Autowired
-    public AccountController(AccountApplicationService applicationService) {
+    public AccountController(AccountApplicationService applicationService,
+                           AccountQueryHandler accountQueryHandler,
+                           TransactionQueryHandler transactionQueryHandler) {
         this.applicationService = applicationService;
+        this.accountQueryHandler = accountQueryHandler;
+        this.transactionQueryHandler = transactionQueryHandler;
     }
     
     @PostMapping
@@ -295,6 +311,126 @@ public class AccountController {
         } catch (Exception e) {
             AccountLifecycleResponse response = AccountLifecycleResponse.failure(accountId, e.getMessage());
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+        }
+    }
+    
+    // Query Endpoints
+    
+    @GetMapping("/{accountId}/summary")
+    public ResponseEntity<AccountSummaryResponse> getAccountSummary(@PathVariable UUID accountId) {
+        try {
+            AccountSummaryQuery query = new AccountSummaryQuery(accountId);
+            return accountQueryHandler.getAccountSummary(query)
+                .map(readModel -> ResponseEntity.ok(AccountSummaryResponse.fromReadModel(readModel)))
+                .orElse(ResponseEntity.notFound().build());
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+    
+    @GetMapping("/search")
+    public ResponseEntity<PagedResponse<AccountSummaryResponse>> searchAccounts(
+            @RequestParam(defaultValue = "") String holderName,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) BigDecimal minBalance,
+            @RequestParam(required = false) BigDecimal maxBalance,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(defaultValue = "accountHolderName") String sortBy,
+            @RequestParam(defaultValue = "asc") String sortDirection) {
+        try {
+            AccountSearchQuery query = new AccountSearchQuery(
+                holderName.isEmpty() ? null : holderName,
+                status,
+                minBalance,
+                maxBalance,
+                page,
+                size,
+                sortBy,
+                sortDirection
+            );
+            
+            PagedResponse<AccountSummaryResponse> response = PagedResponse.fromPagedResult(
+                accountQueryHandler.searchAccounts(query),
+                AccountSummaryResponse::fromReadModel
+            );
+            
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+    
+    @GetMapping("/statistics")
+    public ResponseEntity<AccountStatisticsResponse> getAccountStatistics() {
+        try {
+            AccountStatisticsResponse response = AccountStatisticsResponse.fromStatistics(
+                accountQueryHandler.getAccountStatistics()
+            );
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+    
+    @GetMapping("/{accountId}/transactions")
+    public ResponseEntity<PagedResponse<TransactionHistoryResponse>> getTransactionHistory(
+            @PathVariable UUID accountId,
+            @RequestParam(required = false) String fromDate,
+            @RequestParam(required = false) String toDate,
+            @RequestParam(required = false) String transactionType,
+            @RequestParam(required = false) BigDecimal minAmount,
+            @RequestParam(required = false) BigDecimal maxAmount,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        try {
+            TransactionHistoryQuery query = new TransactionHistoryQuery(
+                accountId,
+                fromDate != null ? java.time.LocalDateTime.parse(fromDate + "T00:00:00") : null,
+                toDate != null ? java.time.LocalDateTime.parse(toDate + "T23:59:59") : null,
+                transactionType,
+                minAmount,
+                maxAmount,
+                page,
+                size
+            );
+            
+            PagedResponse<TransactionHistoryResponse> response = PagedResponse.fromPagedResult(
+                transactionQueryHandler.getTransactionHistory(query),
+                TransactionHistoryResponse::fromReadModel
+            );
+            
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+    
+    @GetMapping("/{accountId}/transactions/statistics")
+    public ResponseEntity<TransactionStatisticsResponse> getTransactionStatistics(
+            @PathVariable UUID accountId,
+            @RequestParam(required = false) String fromDate,
+            @RequestParam(required = false) String toDate) {
+        try {
+            TransactionStatisticsResponse response;
+            
+            if (fromDate != null && toDate != null) {
+                response = TransactionStatisticsResponse.fromStatistics(
+                    transactionQueryHandler.getTransactionStatistics(
+                        accountId,
+                        java.time.LocalDateTime.parse(fromDate + "T00:00:00"),
+                        java.time.LocalDateTime.parse(toDate + "T23:59:59")
+                    )
+                );
+            } else {
+                response = TransactionStatisticsResponse.fromStatistics(
+                    transactionQueryHandler.getTransactionStatistics(accountId)
+                );
+            }
+            
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
 }
