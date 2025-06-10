@@ -107,7 +107,7 @@ jobs:
       run: mvn org.owasp:dependency-check-maven:check
     
     - name: Upload security scan results
-      uses: github/codeql-action/upload-sarif@v2
+      uses: github/codeql-action/upload-sarif@v3
       if: always()
       with:
         sarif_file: target/dependency-check-report.sarif
