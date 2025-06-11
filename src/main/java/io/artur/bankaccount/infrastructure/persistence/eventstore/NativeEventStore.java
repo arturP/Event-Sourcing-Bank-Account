@@ -11,7 +11,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
@@ -24,6 +24,8 @@ public class NativeEventStore implements EventStorePort {
     private final DataSource dataSource;
     private final EventSerializer eventSerializer;
     private final ConcurrentHashMap<UUID, AtomicLong> versionCounters = new ConcurrentHashMap<>();
+    private final ExecutorService eventProcessingExecutor;
+    private final ExecutorService dbOperationExecutor;
     
     // SQL statements
     private static final String INSERT_EVENT_SQL = 
@@ -51,6 +53,16 @@ public class NativeEventStore implements EventStorePort {
     public NativeEventStore(DataSource dataSource, EventSerializer eventSerializer) {
         this.dataSource = dataSource;
         this.eventSerializer = eventSerializer;
+        this.eventProcessingExecutor = Executors.newFixedThreadPool(10, r -> {
+            Thread t = new Thread(r, "event-processor");
+            t.setDaemon(true);
+            return t;
+        });
+        this.dbOperationExecutor = Executors.newFixedThreadPool(5, r -> {
+            Thread t = new Thread(r, "db-operation");
+            t.setDaemon(true);
+            return t;
+        });
         initializeSchema();
     }
     
@@ -80,6 +92,13 @@ public class NativeEventStore implements EventStorePort {
     }
     
     @Override
+    public CompletableFuture<Void> saveEventAsync(UUID aggregateId, DomainEvent event) {
+        return CompletableFuture.runAsync(() -> {
+            saveEvent(aggregateId, event);
+        }, dbOperationExecutor);
+    }
+    
+    @Override
     public List<DomainEvent> loadEvents(UUID aggregateId) {
         try (Connection conn = dataSource.getConnection();
              PreparedStatement stmt = conn.prepareStatement(SELECT_EVENTS_SQL)) {
@@ -98,6 +117,13 @@ public class NativeEventStore implements EventStorePort {
         } catch (SQLException e) {
             throw new RuntimeException("Error loading events for aggregate " + aggregateId, e);
         }
+    }
+    
+    @Override
+    public CompletableFuture<List<DomainEvent>> loadEventsAsync(UUID aggregateId) {
+        return CompletableFuture.supplyAsync(() -> {
+            return loadEvents(aggregateId);
+        }, dbOperationExecutor);
     }
     
     @Override
@@ -121,6 +147,13 @@ public class NativeEventStore implements EventStorePort {
             throw new RuntimeException("Error loading events from version " + fromVersion + 
                                      " for aggregate " + aggregateId, e);
         }
+    }
+    
+    @Override
+    public CompletableFuture<List<DomainEvent>> loadEventsFromVersionAsync(UUID aggregateId, long fromVersion) {
+        return CompletableFuture.supplyAsync(() -> {
+            return loadEventsFromVersion(aggregateId, fromVersion);
+        }, dbOperationExecutor);
     }
     
     @Override
@@ -150,6 +183,13 @@ public class NativeEventStore implements EventStorePort {
         } catch (SQLException e) {
             throw new RuntimeException("Error loading paginated events for aggregate " + aggregateId, e);
         }
+    }
+    
+    @Override
+    public CompletableFuture<EventPage> loadEventsAsync(UUID aggregateId, int offset, int limit) {
+        return CompletableFuture.supplyAsync(() -> {
+            return loadEvents(aggregateId, offset, limit);
+        }, dbOperationExecutor);
     }
     
     @Override

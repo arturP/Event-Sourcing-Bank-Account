@@ -13,14 +13,23 @@ import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
 
 @Component
 public class AccountSummaryProjectionHandler {
     
     private final AccountSummaryQueryRepository repository;
+    private final Executor projectionExecutor;
     
     public AccountSummaryProjectionHandler(AccountSummaryQueryRepository repository) {
         this.repository = repository;
+        this.projectionExecutor = Executors.newFixedThreadPool(5, r -> {
+            Thread t = new Thread(r, "projection-handler");
+            t.setDaemon(true);
+            return t;
+        });
     }
     
     public void handle(AccountOpenedEvent event) {
@@ -34,6 +43,10 @@ public class AccountSummaryProjectionHandler {
         repository.save(readModel);
     }
     
+    public CompletableFuture<Void> handleAsync(AccountOpenedEvent event) {
+        return CompletableFuture.runAsync(() -> handle(event), projectionExecutor);
+    }
+    
     public void handle(MoneyDepositedEvent event) {
         repository.findByAccountId(event.getId())
             .ifPresent(readModel -> {
@@ -42,6 +55,10 @@ public class AccountSummaryProjectionHandler {
                 readModel.updateBalance(newBalance);
                 repository.save(readModel);
             });
+    }
+    
+    public CompletableFuture<Void> handleAsync(MoneyDepositedEvent event) {
+        return CompletableFuture.runAsync(() -> handle(event), projectionExecutor);
     }
     
     public void handle(MoneyWithdrawnEvent event) {
@@ -54,6 +71,10 @@ public class AccountSummaryProjectionHandler {
             });
     }
     
+    public CompletableFuture<Void> handleAsync(MoneyWithdrawnEvent event) {
+        return CompletableFuture.runAsync(() -> handle(event), projectionExecutor);
+    }
+    
     public void handle(MoneyTransferredEvent event) {
         repository.findByAccountId(event.getId())
             .ifPresent(readModel -> {
@@ -62,6 +83,10 @@ public class AccountSummaryProjectionHandler {
                 readModel.updateBalance(newBalance);
                 repository.save(readModel);
             });
+    }
+    
+    public CompletableFuture<Void> handleAsync(MoneyTransferredEvent event) {
+        return CompletableFuture.runAsync(() -> handle(event), projectionExecutor);
     }
     
     public void handle(MoneyReceivedEvent event) {
@@ -74,12 +99,20 @@ public class AccountSummaryProjectionHandler {
             });
     }
     
+    public CompletableFuture<Void> handleAsync(MoneyReceivedEvent event) {
+        return CompletableFuture.runAsync(() -> handle(event), projectionExecutor);
+    }
+    
     public void handle(AccountFrozenEvent event) {
         repository.findByAccountId(event.getId())
             .ifPresent(readModel -> {
                 readModel.updateStatus("FROZEN", event.getFrozenBy(), event.getReason());
                 repository.save(readModel);
             });
+    }
+    
+    public CompletableFuture<Void> handleAsync(AccountFrozenEvent event) {
+        return CompletableFuture.runAsync(() -> handle(event), projectionExecutor);
     }
     
     public void handle(AccountClosedEvent event) {
@@ -89,5 +122,9 @@ public class AccountSummaryProjectionHandler {
                 readModel.updateBalance(event.getFinalBalance().getAmount());
                 repository.save(readModel);
             });
+    }
+    
+    public CompletableFuture<Void> handleAsync(AccountClosedEvent event) {
+        return CompletableFuture.runAsync(() -> handle(event), projectionExecutor);
     }
 }

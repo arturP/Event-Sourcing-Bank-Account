@@ -10,14 +10,23 @@ import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
 
 @Component
 public class TransactionProjectionHandler {
     
     private final TransactionHistoryQueryRepository repository;
+    private final Executor projectionExecutor;
     
     public TransactionProjectionHandler(TransactionHistoryQueryRepository repository) {
         this.repository = repository;
+        this.projectionExecutor = Executors.newFixedThreadPool(5, r -> {
+            Thread t = new Thread(r, "transaction-projection");
+            t.setDaemon(true);
+            return t;
+        });
     }
     
     public void handle(MoneyDepositedEvent event) {
@@ -32,6 +41,10 @@ public class TransactionProjectionHandler {
         repository.save(transaction);
     }
     
+    public CompletableFuture<Void> handleAsync(MoneyDepositedEvent event) {
+        return CompletableFuture.runAsync(() -> handle(event), projectionExecutor);
+    }
+    
     public void handle(MoneyWithdrawnEvent event) {
         TransactionReadModel transaction = TransactionReadModel.createWithdrawal(
             event.getId(),
@@ -42,6 +55,10 @@ public class TransactionProjectionHandler {
         );
         
         repository.save(transaction);
+    }
+    
+    public CompletableFuture<Void> handleAsync(MoneyWithdrawnEvent event) {
+        return CompletableFuture.runAsync(() -> handle(event), projectionExecutor);
     }
     
     public void handle(MoneyTransferredEvent event) {
@@ -57,6 +74,10 @@ public class TransactionProjectionHandler {
         repository.save(transaction);
     }
     
+    public CompletableFuture<Void> handleAsync(MoneyTransferredEvent event) {
+        return CompletableFuture.runAsync(() -> handle(event), projectionExecutor);
+    }
+    
     public void handle(MoneyReceivedEvent event) {
         TransactionReadModel transaction = TransactionReadModel.createTransferIn(
             event.getId(),
@@ -68,6 +89,10 @@ public class TransactionProjectionHandler {
         );
         
         repository.save(transaction);
+    }
+    
+    public CompletableFuture<Void> handleAsync(MoneyReceivedEvent event) {
+        return CompletableFuture.runAsync(() -> handle(event), projectionExecutor);
     }
     
     private LocalDateTime convertToLocalDateTime(java.time.LocalDateTime timestamp) {

@@ -6,29 +6,41 @@ import io.artur.bankaccount.application.ports.incoming.AccountQueryUseCase;
 import io.artur.bankaccount.application.ports.outgoing.AccountRepository;
 import io.artur.bankaccount.application.ports.outgoing.CachePort;
 import io.artur.bankaccount.application.ports.outgoing.MetricsPort;
+import io.artur.bankaccount.application.services.AsyncEventProcessor;
 import io.artur.bankaccount.domain.account.aggregates.BankAccount;
 import io.artur.bankaccount.domain.shared.valueobjects.Money;
 
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
 public class AccountApplicationService implements AccountManagementUseCase, AccountQueryUseCase {
     
     private final AccountRepository accountRepository;
     private final CachePort cachePort;
     private final MetricsPort metricsPort;
+    private final AsyncEventProcessor eventProcessor;
     
     public AccountApplicationService(AccountRepository accountRepository) {
         this.accountRepository = accountRepository;
         this.cachePort = null; // Optional dependency
         this.metricsPort = null; // Optional dependency
+        this.eventProcessor = null; // Optional dependency
     }
     
     public AccountApplicationService(AccountRepository accountRepository, CachePort cachePort, MetricsPort metricsPort) {
         this.accountRepository = accountRepository;
         this.cachePort = cachePort;
         this.metricsPort = metricsPort;
+        this.eventProcessor = null; // Optional dependency
+    }
+    
+    public AccountApplicationService(AccountRepository accountRepository, CachePort cachePort, MetricsPort metricsPort, AsyncEventProcessor eventProcessor) {
+        this.accountRepository = accountRepository;
+        this.cachePort = cachePort;
+        this.metricsPort = metricsPort;
+        this.eventProcessor = eventProcessor;
     }
     
     @Override
@@ -44,6 +56,11 @@ public class AccountApplicationService implements AccountManagementUseCase, Acco
             );
             
             accountRepository.save(account);
+            
+            // Process events asynchronously
+            if (eventProcessor != null) {
+                eventProcessor.processAccountEventsAsync(account.getUncommittedEvents());
+            }
             
             // Invalidate cache for new account
             if (cachePort != null) {
@@ -68,6 +85,11 @@ public class AccountApplicationService implements AccountManagementUseCase, Acco
             account.deposit(command.getAmount(), command.getMetadata());
             accountRepository.save(account);
             
+            // Process events asynchronously
+            if (eventProcessor != null) {
+                eventProcessor.processAccountEventsAsync(account.getUncommittedEvents());
+            }
+            
             // Update cache with new balance
             if (cachePort != null) {
                 cachePort.updateBalance(account.getAccountId(), account.getBalance());
@@ -90,6 +112,11 @@ public class AccountApplicationService implements AccountManagementUseCase, Acco
                 BankAccount account = loadAccount(command.getAccountId());
                 account.withdraw(command.getAmount(), command.getMetadata());
                 accountRepository.save(account);
+                
+                // Process events asynchronously
+                if (eventProcessor != null) {
+                    eventProcessor.processAccountEventsAsync(account.getUncommittedEvents());
+                }
                 
                 // Update cache with new balance
                 if (cachePort != null) {
@@ -124,6 +151,14 @@ public class AccountApplicationService implements AccountManagementUseCase, Acco
             
             accountRepository.save(fromAccount);
             accountRepository.save(toAccount);
+            
+            // Process events asynchronously for both accounts
+            if (eventProcessor != null) {
+                CompletableFuture.allOf(
+                    eventProcessor.processAccountEventsAsync(fromAccount.getUncommittedEvents()),
+                    eventProcessor.processAccountEventsAsync(toAccount.getUncommittedEvents())
+                );
+            }
             
             // Update cache for both accounts
             if (cachePort != null) {

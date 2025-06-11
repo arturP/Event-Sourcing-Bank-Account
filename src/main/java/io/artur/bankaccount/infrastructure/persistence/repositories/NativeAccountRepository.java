@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * Native account repository implementation that uses the native event store
@@ -169,5 +170,20 @@ public class NativeAccountRepository implements AccountRepository {
      */
     public long getEventCount(UUID accountId) {
         return eventStore.getEventCount(accountId);
+    }
+    
+    @Override
+    public CompletableFuture<Void> saveAsync(BankAccount account) {
+        return CompletableFuture.runAsync(() -> save(account));
+    }
+    
+    @Override
+    public CompletableFuture<Optional<BankAccount>> findByIdAsync(UUID accountId) {
+        return CompletableFuture.supplyAsync(() -> findById(accountId));
+    }
+    
+    @Override
+    public CompletableFuture<List<BankAccount>> findAllAsync() {
+        return CompletableFuture.supplyAsync(this::findAll);
     }
 }
