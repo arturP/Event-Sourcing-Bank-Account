@@ -24,25 +24,28 @@ public class NativeEventStore implements EventStorePort {
     private final DataSource dataSource;
     private final EventSerializer eventSerializer;
     private final ConcurrentHashMap<UUID, AtomicLong> versionCounters = new ConcurrentHashMap<>();
-    private final ExecutorService eventProcessingExecutor;
     private final ExecutorService dbOperationExecutor;
     
     // SQL statements
-    private static final String INSERT_EVENT_SQL = 
-        "INSERT INTO events (aggregate_id, event_type, event_data, event_version, created_at, correlation_id) " +
-        "VALUES (?, ?, ?, ?, ?, ?)";
+    private static final String INSERT_EVENT_SQL = """
+        INSERT INTO events (aggregate_id, event_type, event_data, event_version, created_at, correlation_id)
+        VALUES (?, ?, ?, ?, ?, ?)
+        """;
     
-    private static final String SELECT_EVENTS_SQL = 
-        "SELECT event_type, event_data, event_version, created_at, correlation_id " +
-        "FROM events WHERE aggregate_id = ? ORDER BY event_version ASC";
+    private static final String SELECT_EVENTS_SQL = """
+        SELECT event_type, event_data, event_version, created_at, correlation_id
+        FROM events WHERE aggregate_id = ? ORDER BY event_version ASC
+        """;
     
-    private static final String SELECT_EVENTS_PAGINATED_SQL = 
-        "SELECT event_type, event_data, event_version, created_at, correlation_id " +
-        "FROM events WHERE aggregate_id = ? ORDER BY event_version ASC LIMIT ? OFFSET ?";
+    private static final String SELECT_EVENTS_PAGINATED_SQL = """
+        SELECT event_type, event_data, event_version, created_at, correlation_id
+        FROM events WHERE aggregate_id = ? ORDER BY event_version ASC LIMIT ? OFFSET ?
+        """;
     
-    private static final String SELECT_EVENTS_FROM_VERSION_SQL = 
-        "SELECT event_type, event_data, event_version, created_at, correlation_id " +
-        "FROM events WHERE aggregate_id = ? AND event_version >= ? ORDER BY event_version ASC";
+    private static final String SELECT_EVENTS_FROM_VERSION_SQL = """
+        SELECT event_type, event_data, event_version, created_at, correlation_id
+        FROM events WHERE aggregate_id = ? AND event_version >= ? ORDER BY event_version ASC
+        """;
     
     private static final String COUNT_EVENTS_SQL = 
         "SELECT COUNT(*) FROM events WHERE aggregate_id = ?";
@@ -53,11 +56,6 @@ public class NativeEventStore implements EventStorePort {
     public NativeEventStore(DataSource dataSource, EventSerializer eventSerializer) {
         this.dataSource = dataSource;
         this.eventSerializer = eventSerializer;
-        this.eventProcessingExecutor = Executors.newCachedThreadPool(r -> {
-            Thread t = new Thread(r, "event-processor");
-            t.setDaemon(true);
-            return t;
-        });
         this.dbOperationExecutor = Executors.newCachedThreadPool(r -> {
             Thread t = new Thread(r, "db-operation");
             t.setDaemon(true);
@@ -79,7 +77,7 @@ public class NativeEventStore implements EventStorePort {
             stmt.setString(3, serializedEvent);
             stmt.setLong(4, version);
             stmt.setTimestamp(5, Timestamp.valueOf(LocalDateTime.now()));
-            stmt.setString(6, event.getMetadata().getCorrelationId().toString());
+            stmt.setString(6, event.getMetadata().getCorrelationId());
             
             int rowsAffected = stmt.executeUpdate();
             if (rowsAffected == 0) {

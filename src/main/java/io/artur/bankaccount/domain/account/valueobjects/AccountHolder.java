@@ -87,9 +87,6 @@ public class AccountHolder {
         return fullName;
     }
     
-    public String getInitials() {
-        return firstName.charAt(0) + "." + lastName.charAt(0) + ".";
-    }
     
     @Override
     public boolean equals(Object o) {
