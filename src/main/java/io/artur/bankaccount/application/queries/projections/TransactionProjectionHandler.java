@@ -22,7 +22,7 @@ public class TransactionProjectionHandler {
     
     public TransactionProjectionHandler(TransactionHistoryQueryRepository repository) {
         this.repository = repository;
-        this.projectionExecutor = Executors.newFixedThreadPool(5, r -> {
+        this.projectionExecutor = Executors.newCachedThreadPool(r -> {
             Thread t = new Thread(r, "transaction-projection");
             t.setDaemon(true);
             return t;

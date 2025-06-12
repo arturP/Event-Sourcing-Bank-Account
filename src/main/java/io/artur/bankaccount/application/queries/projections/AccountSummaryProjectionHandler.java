@@ -25,7 +25,7 @@ public class AccountSummaryProjectionHandler {
     
     public AccountSummaryProjectionHandler(AccountSummaryQueryRepository repository) {
         this.repository = repository;
-        this.projectionExecutor = Executors.newFixedThreadPool(5, r -> {
+        this.projectionExecutor = Executors.newCachedThreadPool(r -> {
             Thread t = new Thread(r, "projection-handler");
             t.setDaemon(true);
             return t;

@@ -22,7 +22,7 @@ public class AsyncEventProcessor {
                               TransactionProjectionHandler transactionHandler) {
         this.accountSummaryHandler = accountSummaryHandler;
         this.transactionHandler = transactionHandler;
-        this.eventProcessingExecutor = Executors.newFixedThreadPool(10, r -> {
+        this.eventProcessingExecutor = Executors.newCachedThreadPool(r -> {
             Thread t = new Thread(r, "async-event-processor");
             t.setDaemon(true);
             return t;
@@ -36,35 +36,44 @@ public class AsyncEventProcessor {
     }
     
     private void processEventProjections(DomainEvent event) {
-        if (event instanceof AccountOpenedEvent e) {
-            accountSummaryHandler.handleAsync(e);
-        } else if (event instanceof MoneyDepositedEvent e) {
-            CompletableFuture.allOf(
-                accountSummaryHandler.handleAsync(e),
-                transactionHandler.handleAsync(e)
-            ).join();
-        } else if (event instanceof MoneyWithdrawnEvent e) {
-            CompletableFuture.allOf(
-                accountSummaryHandler.handleAsync(e),
-                transactionHandler.handleAsync(e)
-            ).join();
-        } else if (event instanceof MoneyTransferredEvent e) {
-            CompletableFuture.allOf(
-                accountSummaryHandler.handleAsync(e),
-                transactionHandler.handleAsync(e)
-            ).join();
-        } else if (event instanceof MoneyReceivedEvent e) {
-            CompletableFuture.allOf(
-                accountSummaryHandler.handleAsync(e),
-                transactionHandler.handleAsync(e)
-            ).join();
-        } else if (event instanceof AccountFrozenEvent e) {
-            accountSummaryHandler.handleAsync(e);
-        } else if (event instanceof AccountClosedEvent e) {
-            accountSummaryHandler.handleAsync(e);
-        } else {
-            // Log unhandled event types
-            System.out.println("Unhandled event type: " + event.getClass().getSimpleName());
+        switch (event) {
+            case AccountOpenedEvent e -> 
+                accountSummaryHandler.handleAsync(e);
+            
+            case MoneyDepositedEvent e -> 
+                CompletableFuture.allOf(
+                    accountSummaryHandler.handleAsync(e),
+                    transactionHandler.handleAsync(e)
+                ).join();
+            
+            case MoneyWithdrawnEvent e -> 
+                CompletableFuture.allOf(
+                    accountSummaryHandler.handleAsync(e),
+                    transactionHandler.handleAsync(e)
+                ).join();
+            
+            case MoneyTransferredEvent e -> 
+                CompletableFuture.allOf(
+                    accountSummaryHandler.handleAsync(e),
+                    transactionHandler.handleAsync(e)
+                ).join();
+            
+            case MoneyReceivedEvent e -> 
+                CompletableFuture.allOf(
+                    accountSummaryHandler.handleAsync(e),
+                    transactionHandler.handleAsync(e)
+                ).join();
+            
+            case AccountFrozenEvent e -> 
+                accountSummaryHandler.handleAsync(e);
+            
+            case AccountClosedEvent e -> 
+                accountSummaryHandler.handleAsync(e);
+            
+            default -> {
+                // Log unhandled event types using modern structured logging
+                System.out.println("Unhandled event type: " + event.getClass().getSimpleName());
+            }
         }
     }
     

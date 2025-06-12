@@ -53,12 +53,12 @@ public class NativeEventStore implements EventStorePort {
     public NativeEventStore(DataSource dataSource, EventSerializer eventSerializer) {
         this.dataSource = dataSource;
         this.eventSerializer = eventSerializer;
-        this.eventProcessingExecutor = Executors.newFixedThreadPool(10, r -> {
+        this.eventProcessingExecutor = Executors.newCachedThreadPool(r -> {
             Thread t = new Thread(r, "event-processor");
             t.setDaemon(true);
             return t;
         });
-        this.dbOperationExecutor = Executors.newFixedThreadPool(5, r -> {
+        this.dbOperationExecutor = Executors.newCachedThreadPool(r -> {
             Thread t = new Thread(r, "db-operation");
             t.setDaemon(true);
             return t;
