@@ -70,15 +70,16 @@ The complete and current list is in Swagger UI. Actuator exposes `health`, `info
 mvn test
 ```
 
-33 tests across six files, covering the aggregate, the application service, async event
+32 tests across six files, covering the aggregate, the application service, async event
 processing, the REST surface and two integration paths over the native event store.
 
 ## Not in scope
 
 Deliberately absent, so that reading the code does not raise the question:
 
-- **Authentication.** There is no JWT implementation. The `jjwt` dependencies and the JWT
-  properties are left over from an earlier direction and are not wired to anything.
+- **Authentication.** Spring Security runs on its defaults and nothing more. An earlier
+  attempt at JWT left dependencies and a token secret behind without a line of code to
+  use them; both are gone.
 - **A durable database.** H2 in memory only. There is no migration tooling.
 - **Measured performance.** The cache and the metrics collector report their own numbers
   at runtime, but this repository contains no benchmark, so it makes no throughput claim.
