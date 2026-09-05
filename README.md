@@ -20,6 +20,11 @@ infrastructure/           adapters: event store, cache, metrics, persistence, co
 api/                      REST controllers and DTOs
 ```
 
+Those boundaries are not a convention. `ArchitectureTest` fails the build when the domain
+reaches for Spring or for a layer above it, when the application reaches past its ports,
+and when new code in the presentation layer touches an aggregate directly. The controller
+that does so today is listed in the rule by name, so the debt is visible and cannot grow.
+
 Events are appended to an H2 table indexed by aggregate id, aggregate version, event type
 and timestamp. Account snapshots are stored in a separate table, so rebuilding an account
 does not have to replay its history from zero.
@@ -70,8 +75,9 @@ The complete and current list is in Swagger UI. Actuator exposes `health`, `info
 mvn test
 ```
 
-32 tests across six files, covering the aggregate, the application service, async event
-processing, the REST surface and two integration paths over the native event store.
+38 tests across seven files, covering the aggregate, the application service, async event
+processing, the REST surface, two integration paths over the native event store, and the
+architecture rules described above.
 
 ## Not in scope
 
