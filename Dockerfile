@@ -1,5 +1,5 @@
 # Multi-stage build for production deployment
-FROM maven:3.9.4-eclipse-temurin-17-alpine AS build
+FROM maven:3.9-eclipse-temurin-21-alpine AS build
 
 # Set working directory
 WORKDIR /app
@@ -13,7 +13,10 @@ COPY src ./src
 RUN mvn clean package -DskipTests
 
 # Production stage
-FROM eclipse-temurin:17-jre-alpine
+FROM eclipse-temurin:21-jre-alpine
+
+# curl is required by the HEALTHCHECK below and is not present in the jre-alpine image
+RUN apk add --no-cache curl
 
 # Create application user for security
 RUN addgroup --system appgroup && adduser --system --ingroup appgroup appuser
