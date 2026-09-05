@@ -1,189 +1,89 @@
-# Event Sourcing Bank Account with REST API
+# Event Sourcing Bank Account
 
-A comprehensive banking application built with Event Sourcing architecture, featuring high-performance REST API, JWT authentication, and advanced optimization features.
+An event-sourced banking domain written by hand on Java 21 and Spring Boot. There is no
+event sourcing framework here: the aggregate, the event store, the replay and the read
+models are all in this repository, which is the point of it. The same domain handed to a
+framework instead lives in [reactive-event-sourcing](https://github.com/arturP/reactive-event-sourcing),
+built on Akka persistence.
 
-## 🚀 Features
+## Architecture
 
-### Core Banking
-- **Account Management**: Create accounts, deposits, withdrawals with overdraft protection
-- **Event Sourcing**: Complete audit trail with event replay capabilities  
-- **Domain-Driven Design**: Value objects, aggregates, domain services
-- **CQRS Pattern**: Separate command and query responsibilities
+The code is organised as ports and adapters. The domain knows nothing about Spring, H2
+or HTTP.
 
-### Performance & Scalability  
-- **✅ HikariCP Connection Pooling** - Optimized database connections
-- **✅ Async Event Processing** - CompletableFuture-based async operations
-- **✅ Event Stream Pagination** - Memory-efficient large dataset handling
-- **✅ Caffeine Caching** - High-performance read model caching (99%+ hit rates)
-- **✅ Database Indexing** - Comprehensive index strategies for optimal performance
-- **✅ Metrics Collection** - Dropwizard Metrics for monitoring
-- **✅ Batch Processing** - High-throughput event handling
-
-### REST API & Security
-- **✅ Spring Boot REST API** - Production-ready RESTful endpoints
-- **✅ JWT Authentication** - Stateless authentication with configurable expiration
-- **✅ Role-based Security** - USER and ADMIN role permissions
-- **✅ Input Validation** - Comprehensive request validation with error handling
-- **✅ OpenAPI Documentation** - Interactive Swagger UI at `/swagger-ui.html`
-- **✅ Exception Handling** - Structured error responses
-- **✅ Health Checks** - System health and metrics endpoints
-
-## 📡 API Endpoints
-
-### Authentication
 ```
-POST /api/auth/login          # Login with username/password, get JWT token
-GET  /api/auth/demo-users     # View available demo users
+domain/                   account aggregate, events, value objects, invariants
+application/ports/        incoming and outgoing interfaces, the only way in or out
+application/commands/     write side: commands produce events
+application/queries/      read side: projections and read models
+infrastructure/           adapters: event store, cache, metrics, persistence, config
+api/                      REST controllers and DTOs
 ```
 
-### Account Management (Requires JWT)
-```
-POST /api/accounts                    # Create new bank account
-GET  /api/accounts                    # Get all accounts  
-GET  /api/accounts/{id}               # Get specific account
-GET  /api/accounts/{id}/balance       # Get account balance (cached)
-POST /api/accounts/{id}/deposit       # Deposit money
-POST /api/accounts/{id}/withdraw      # Withdraw money
-```
+Events are appended to an H2 table indexed by aggregate id, aggregate version, event type
+and timestamp. Account snapshots are stored in a separate table, so rebuilding an account
+does not have to replay its history from zero.
 
-### System
-```
-GET  /api/health                      # Health check
-GET  /api/health/metrics              # Performance metrics
-GET  /swagger-ui.html                 # Interactive API documentation
-```
+## What the domain does
 
-## 🔐 Demo Users
+Accounts open, take deposits and withdrawals against an overdraft limit, and transfer
+between each other.
 
-| Username | Password | Roles      |
-|----------|----------|------------|
-| admin    | admin123 | ADMIN, USER|
-| user     | user123  | USER       |
-| demo     | demo123  | USER       |
+An account has a lifecycle rather than a boolean. It can be frozen, locked, suspended,
+marked dormant, closed and reactivated, and every transition is an event. That makes two
+questions answerable from the event history rather than from a status column: what has
+happened to this account, and whether a given action is permitted right now.
 
-## 🛠️ Quick Start
+The read side serves balance, status, account summary, search across accounts and
+portfolio statistics, plus transaction history sliced by type, by recency, by day and by
+month.
 
-### 1. Build and Run
+## Running it
+
 ```bash
-# Build the project
 mvn clean install
-
-# Run the application  
 mvn spring-boot:run
-
-# Access the API documentation
-open http://localhost:8080/swagger-ui.html
 ```
 
-### 2. Test the API
+The application starts on port 8080 with an in-memory H2 database, so state is gone when
+it stops. Interactive API documentation is at `/swagger-ui.html`.
 
-#### Login to get JWT token:
-```bash
-curl -X POST http://localhost:8080/api/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"username": "demo", "password": "demo123"}'
-```
+Spring Security is on the classpath without a configuration of its own, so the default
+applies: HTTP Basic, with a generated password printed to the log at startup.
 
-#### Create a bank account:
-```bash
-curl -X POST http://localhost:8080/api/accounts \
-  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "accountHolder": "John Doe",
-    "initialBalance": 1000.00,
-    "overdraftLimit": 500.00
-  }'
-```
+## API
 
-#### Make a deposit:
-```bash
-curl -X POST http://localhost:8080/api/accounts/{ACCOUNT_ID}/deposit \
-  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "amount": 250.00,
-    "description": "Salary deposit"
-  }'
-```
+One controller under `/api/accounts`. Rather than listing thirty endpoints, the shape is:
 
-## 📊 Performance Metrics
+- account operations: create, deposit, withdraw, transfer, bulk operation
+- lifecycle: freeze, unlock, lock, suspend, mark dormant, close, reactivate
+- lifecycle queries: history, current restrictions, whether an action can be performed
+- account reads: balance, status, summary, overdraft limit, search, statistics
+- transaction reads: full history, recent, by type, today, monthly, statistics
 
-The application includes comprehensive performance monitoring:
+The complete and current list is in Swagger UI. Actuator exposes `health`, `info` and
+`metrics` under `/actuator`.
 
-- **Cache Hit Rates**: 99%+ for read operations
-- **Transaction Processing**: 70,000+ operations/sec 
-- **Event Stream Pagination**: Memory-efficient handling of large event histories
-- **Async Processing**: Non-blocking operations with CompletableFuture
-- **Connection Pooling**: Optimized database connections with HikariCP
-
-## 🧪 Testing
+## Tests
 
 ```bash
-# Run all tests (73 tests)
 mvn test
-
-# Run without integration tests  
-mvn test -Dtest="!*Integration*"
-
-# View test coverage
-mvn test jacoco:report
 ```
 
-## 🏗️ Architecture
+33 tests across six files, covering the aggregate, the application service, async event
+processing, the REST surface and two integration paths over the native event store.
 
-### Event Sourcing
-- Events stored in H2 database with comprehensive indexing
-- Event replay capabilities for audit and debugging
-- Snapshot support for performance optimization
-- Paginated event stream loading
+## Not in scope
 
-### Performance Optimizations
-- **Caffeine Cache**: Multi-level caching for read models
-- **Async Processing**: Separate thread pools for events, projections, notifications
-- **Batch Processing**: High-throughput event handling
-- **Database Indexes**: Optimized queries for account_id, timestamps, event types
+Deliberately absent, so that reading the code does not raise the question:
 
-### Security  
-- JWT tokens with configurable expiration (24h default)
-- Role-based access control (USER, ADMIN)
-- CORS configuration for cross-origin requests
-- Comprehensive input validation
+- **Authentication.** There is no JWT implementation. The `jjwt` dependencies and the JWT
+  properties are left over from an earlier direction and are not wired to anything.
+- **A durable database.** H2 in memory only. There is no migration tooling.
+- **Measured performance.** The cache and the metrics collector report their own numbers
+  at runtime, but this repository contains no benchmark, so it makes no throughput claim.
+- **Multi-currency, fraud detection, notifications.** Not attempted.
 
-## 📈 Monitoring
+## Built with
 
-Access real-time metrics at:
-- `/api/health` - System health status
-- `/api/health/metrics` - Performance statistics  
-- `/actuator/metrics` - Detailed Spring Actuator metrics
-
-## 🔧 Configuration
-
-Key configuration in `application.properties`:
-```properties
-# Server
-server.port=8080
-
-# Database & Connection Pool
-db.pool.maxSize=20
-db.pool.metrics.enabled=true
-
-# JWT Security
-app.jwt.expiration=86400000  # 24 hours
-
-# API Documentation
-springdoc.swagger-ui.path=/swagger-ui.html
-```
-
-## 🎯 Next Steps
-
-Potential enhancements:
-- Microservices architecture with service discovery
-- Real-time WebSocket notifications
-- Multi-currency support with exchange rates
-- Advanced fraud detection
-- Kubernetes deployment with auto-scaling
-
----
-
-**Built with**: Spring Boot, Event Sourcing, JWT Security, Caffeine Cache, HikariCP, OpenAPI, Dropwizard Metrics
+Java 21, Spring Boot, H2, Caffeine, HikariCP, Dropwizard Metrics, springdoc-openapi.
