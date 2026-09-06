@@ -12,4 +12,11 @@ public interface AccountManagementUseCase {
     void withdraw(WithdrawMoneyCommand command);
     
     void transfer(TransferMoneyCommand command);
+    void freezeAccount(FreezeAccountCommand command);
+
+    void closeAccount(CloseAccountCommand command);
+
+    void reactivateAccount(ReactivateAccountCommand command);
+
+    void markAccountDormant(MarkAccountDormantCommand command);
 }

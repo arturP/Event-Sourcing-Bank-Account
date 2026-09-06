@@ -1,5 +1,6 @@
 package io.artur.bankaccount.infrastructure.persistence.queries;
 
+import io.artur.bankaccount.application.queries.readmodels.AccountStatistics;
 import io.artur.bankaccount.application.ports.outgoing.AccountSummaryQueryRepository;
 import io.artur.bankaccount.application.queries.models.AccountSearchQuery;
 import io.artur.bankaccount.application.queries.readmodels.AccountSummaryReadModel;

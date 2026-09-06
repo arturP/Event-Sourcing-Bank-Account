@@ -22,8 +22,9 @@ api/                      REST controllers and DTOs
 
 Those boundaries are not a convention. `ArchitectureTest` fails the build when the domain
 reaches for Spring or for a layer above it, when the application reaches past its ports,
-and when new code in the presentation layer touches an aggregate directly. The controller
-that does so today is listed in the rule by name, so the debt is visible and cannot grow.
+and when presentation code touches the domain, application implementations or outgoing
+ports. Controllers use incoming ports and application data contracts; these contracts
+cannot depend on domain objects or adapters. There are no controller exceptions to these rules.
 
 Events are appended to an H2 table indexed by aggregate id, aggregate version, event type
 and timestamp. Account snapshots are stored in a separate table, so rebuilding an account
@@ -75,9 +76,11 @@ The complete and current list is in Swagger UI. Actuator exposes `health`, `info
 mvn test
 ```
 
-38 tests across seven files, covering the aggregate, the application service, async event
-processing, the REST surface, two integration paths over the native event store, and the
-architecture rules described above.
+Tests cover the aggregate, the application service, async event processing, the REST
+surface, native event store integration and the architecture rules described above. A full
+Spring context test also exercises account creation, deposit and read through the incoming
+ports with security filters enabled. Application tests verify detached query results and
+the conversion of command context into domain event metadata.
 
 ## Not in scope
 

@@ -6,7 +6,6 @@ import io.artur.bankaccount.domain.shared.events.EventMetadata;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
-import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
 import java.util.HashMap;
@@ -16,7 +15,6 @@ import java.util.UUID;
 /**
  * Native event serializer that handles domain events without depending on legacy infrastructure
  */
-@Component
 public class EventSerializer {
     
     private final ObjectMapper objectMapper;

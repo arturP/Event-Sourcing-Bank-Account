@@ -1,5 +1,7 @@
 package io.artur.bankaccount.application.queries.handlers;
 
+import io.artur.bankaccount.application.ports.incoming.AccountSummaryQueryUseCase;
+import io.artur.bankaccount.application.queries.readmodels.AccountStatistics;
 import io.artur.bankaccount.application.ports.outgoing.AccountSummaryQueryRepository;
 import io.artur.bankaccount.application.queries.models.AccountSearchQuery;
 import io.artur.bankaccount.application.queries.models.AccountSummaryQuery;
@@ -13,7 +15,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 @Service
-public class AccountQueryHandler {
+public class AccountQueryHandler implements AccountSummaryQueryUseCase {
     
     private final AccountSummaryQueryRepository repository;
     
@@ -21,10 +23,12 @@ public class AccountQueryHandler {
         this.repository = repository;
     }
     
+    @Override
     public Optional<AccountSummaryReadModel> getAccountSummary(AccountSummaryQuery query) {
         return repository.findByAccountId(query.getAccountId());
     }
     
+    @Override
     public PagedResult<AccountSummaryReadModel> searchAccounts(AccountSearchQuery query) {
         return repository.search(query);
     }
@@ -53,7 +57,8 @@ public class AccountQueryHandler {
         return repository.findDormantAccounts(daysWithoutActivity);
     }
     
-    public AccountSummaryQueryRepository.AccountStatistics getAccountStatistics() {
+    @Override
+    public AccountStatistics getAccountStatistics() {
         return repository.getAccountStatistics();
     }
     

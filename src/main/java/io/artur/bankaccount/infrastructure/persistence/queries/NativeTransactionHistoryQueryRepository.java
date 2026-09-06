@@ -1,5 +1,6 @@
 package io.artur.bankaccount.infrastructure.persistence.queries;
 
+import io.artur.bankaccount.application.queries.readmodels.TransactionStatistics;
 import io.artur.bankaccount.application.ports.outgoing.TransactionHistoryQueryRepository;
 import io.artur.bankaccount.application.queries.models.TransactionHistoryQuery;
 import io.artur.bankaccount.application.queries.readmodels.PagedResult;

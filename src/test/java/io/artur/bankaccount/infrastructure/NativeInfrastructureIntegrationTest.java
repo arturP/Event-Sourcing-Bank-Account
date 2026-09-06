@@ -9,7 +9,7 @@ import io.artur.bankaccount.application.ports.outgoing.EventStorePort;
 import io.artur.bankaccount.application.ports.outgoing.MetricsPort;
 import io.artur.bankaccount.application.services.AccountApplicationService;
 import io.artur.bankaccount.domain.account.aggregates.BankAccount;
-import io.artur.bankaccount.domain.shared.events.EventMetadata;
+import io.artur.bankaccount.application.commands.models.CommandContext;
 import io.artur.bankaccount.domain.shared.valueobjects.Money;
 import io.artur.bankaccount.infrastructure.monitoring.NativeMetricsCollector;
 import io.artur.bankaccount.infrastructure.persistence.cache.NativeCacheService;
@@ -69,7 +69,7 @@ class NativeInfrastructureIntegrationTest {
         // Given
         String accountHolderName = "Native Test User";
         BigDecimal overdraftLimit = BigDecimal.valueOf(1000);
-        OpenAccountCommand command = new OpenAccountCommand(UUID.randomUUID(), accountHolderName, overdraftLimit, new EventMetadata(1));
+        OpenAccountCommand command = new OpenAccountCommand(UUID.randomUUID(), accountHolderName, overdraftLimit, new CommandContext(1));
         
         // When
         UUID accountId = accountApplicationService.openAccount(command);
@@ -87,11 +87,11 @@ class NativeInfrastructureIntegrationTest {
         String accountHolderName = "Native Deposit Test";
         BigDecimal overdraftLimit = BigDecimal.valueOf(500);
         UUID accountId = UUID.randomUUID();
-        OpenAccountCommand openCommand = new OpenAccountCommand(accountId, accountHolderName, overdraftLimit, new EventMetadata(1));
+        OpenAccountCommand openCommand = new OpenAccountCommand(accountId, accountHolderName, overdraftLimit, new CommandContext(1));
         accountApplicationService.openAccount(openCommand);
         
         BigDecimal depositAmount = BigDecimal.valueOf(250);
-        DepositMoneyCommand depositCommand = new DepositMoneyCommand(accountId, depositAmount, new EventMetadata(2));
+        DepositMoneyCommand depositCommand = new DepositMoneyCommand(accountId, depositAmount, new CommandContext(2));
         
         // When
         accountApplicationService.deposit(depositCommand);
@@ -156,13 +156,13 @@ class NativeInfrastructureIntegrationTest {
         UUID accountId = UUID.randomUUID();
         
         // When - Create account and perform multiple operations
-        OpenAccountCommand openCommand = new OpenAccountCommand(accountId, accountHolderName, overdraftLimit, new EventMetadata(1));
+        OpenAccountCommand openCommand = new OpenAccountCommand(accountId, accountHolderName, overdraftLimit, new CommandContext(1));
         accountApplicationService.openAccount(openCommand);
         
-        DepositMoneyCommand depositCommand = new DepositMoneyCommand(accountId, BigDecimal.valueOf(500), new EventMetadata(2));
+        DepositMoneyCommand depositCommand = new DepositMoneyCommand(accountId, BigDecimal.valueOf(500), new CommandContext(2));
         accountApplicationService.deposit(depositCommand);
         
-        WithdrawMoneyCommand withdrawCommand = new WithdrawMoneyCommand(accountId, BigDecimal.valueOf(100), new EventMetadata(3));
+        WithdrawMoneyCommand withdrawCommand = new WithdrawMoneyCommand(accountId, BigDecimal.valueOf(100), new CommandContext(3));
         accountApplicationService.withdraw(withdrawCommand);
         
         // Then - Verify event persistence

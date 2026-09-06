@@ -21,14 +21,16 @@ import io.artur.bankaccount.application.commands.models.FreezeAccountCommand;
 import io.artur.bankaccount.application.commands.models.CloseAccountCommand;
 import io.artur.bankaccount.application.commands.models.ReactivateAccountCommand;
 import io.artur.bankaccount.application.commands.models.MarkAccountDormantCommand;
-import io.artur.bankaccount.application.services.AccountApplicationService;
-import io.artur.bankaccount.application.queries.handlers.AccountQueryHandler;
-import io.artur.bankaccount.application.queries.handlers.TransactionQueryHandler;
+import io.artur.bankaccount.application.ports.incoming.AccountManagementUseCase;
+import io.artur.bankaccount.application.ports.incoming.AccountQueryUseCase;
+import io.artur.bankaccount.application.ports.incoming.AccountSummaryQueryUseCase;
+import io.artur.bankaccount.application.ports.incoming.TransactionQueryUseCase;
 import io.artur.bankaccount.application.queries.models.AccountSearchQuery;
 import io.artur.bankaccount.application.queries.models.AccountSummaryQuery;
 import io.artur.bankaccount.application.queries.models.TransactionHistoryQuery;
-import io.artur.bankaccount.domain.account.aggregates.BankAccount;
-import io.artur.bankaccount.domain.shared.events.EventMetadata;
+import io.artur.bankaccount.application.queries.readmodels.AccountDetailsResult;
+import io.artur.bankaccount.application.queries.readmodels.AccountActionResult;
+import io.artur.bankaccount.application.commands.models.CommandContext;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -47,15 +49,18 @@ import java.util.UUID;
 @Validated
 public class AccountController {
     
-    private final AccountApplicationService applicationService;
-    private final AccountQueryHandler accountQueryHandler;
-    private final TransactionQueryHandler transactionQueryHandler;
+    private final AccountManagementUseCase applicationService;
+    private final AccountQueryUseCase accountQueryUseCase;
+    private final AccountSummaryQueryUseCase accountQueryHandler;
+    private final TransactionQueryUseCase transactionQueryHandler;
     
     @Autowired
-    public AccountController(AccountApplicationService applicationService,
-                           AccountQueryHandler accountQueryHandler,
-                           TransactionQueryHandler transactionQueryHandler) {
+    public AccountController(AccountManagementUseCase applicationService,
+                           AccountQueryUseCase accountQueryUseCase,
+                           AccountSummaryQueryUseCase accountQueryHandler,
+                           TransactionQueryUseCase transactionQueryHandler) {
         this.applicationService = applicationService;
+        this.accountQueryUseCase = accountQueryUseCase;
         this.accountQueryHandler = accountQueryHandler;
         this.transactionQueryHandler = transactionQueryHandler;
     }
@@ -63,12 +68,12 @@ public class AccountController {
     @PostMapping
     public ResponseEntity<AccountResponse> createAccount(@Valid @RequestBody CreateAccountRequest request) {
         try {
-            EventMetadata metadata = new EventMetadata(1);
+            CommandContext context = new CommandContext(1);
             OpenAccountCommand command = new OpenAccountCommand(
                 UUID.randomUUID(),
                 request.getAccountHolderName(),
                 request.getOverdraftLimit(),
-                metadata
+                context
             );
             
             UUID accountId = applicationService.openAccount(command);
@@ -90,18 +95,18 @@ public class AccountController {
     @GetMapping("/{accountId}")
     public ResponseEntity<AccountResponse> getAccount(@PathVariable UUID accountId) {
         try {
-            Optional<BankAccount> accountOpt = applicationService.findAccountById(accountId);
+            Optional<AccountDetailsResult> accountOpt = accountQueryUseCase.findAccountById(accountId);
             
             if (accountOpt.isEmpty()) {
                 return ResponseEntity.notFound().build();
             }
             
-            BankAccount account = accountOpt.get();
-            BigDecimal availableBalance = account.getBalance().getAmount().add(account.getOverdraftLimit().getAmount());
+            AccountDetailsResult account = accountOpt.get();
+            BigDecimal availableBalance = account.availableBalance();
             AccountResponse response = new AccountResponse(
                 accountId,
-                account.getAccountHolder().getFullName(),
-                account.getBalance().getAmount(),
+                account.accountHolderName(),
+                account.balance(),
                 availableBalance
             );
             
@@ -117,11 +122,11 @@ public class AccountController {
             @PathVariable UUID accountId,
             @Valid @RequestBody TransactionRequest request) {
         try {
-            EventMetadata metadata = new EventMetadata((int) (System.currentTimeMillis() % Integer.MAX_VALUE));
+            CommandContext context = new CommandContext((int) (System.currentTimeMillis() % Integer.MAX_VALUE));
             DepositMoneyCommand command = new DepositMoneyCommand(
                 accountId,
                 request.getAmount(),
-                metadata
+                context
             );
             
             applicationService.deposit(command);
@@ -149,11 +154,11 @@ public class AccountController {
             @PathVariable UUID accountId,
             @Valid @RequestBody TransactionRequest request) {
         try {
-            EventMetadata metadata = new EventMetadata((int) (System.currentTimeMillis() % Integer.MAX_VALUE));
+            CommandContext context = new CommandContext((int) (System.currentTimeMillis() % Integer.MAX_VALUE));
             WithdrawMoneyCommand command = new WithdrawMoneyCommand(
                 accountId,
                 request.getAmount(),
-                metadata
+                context
             );
             
             applicationService.withdraw(command);
@@ -182,13 +187,13 @@ public class AccountController {
             @PathVariable UUID toAccountId,
             @Valid @RequestBody TransactionRequest request) {
         try {
-            EventMetadata metadata = new EventMetadata((int) (System.currentTimeMillis() % Integer.MAX_VALUE));
+            CommandContext context = new CommandContext((int) (System.currentTimeMillis() % Integer.MAX_VALUE));
             TransferMoneyCommand command = new TransferMoneyCommand(
                 fromAccountId,
                 toAccountId,
                 request.getAmount(),
                 request.getDescription() != null ? request.getDescription() : "Transfer",
-                metadata
+                context
             );
             
             applicationService.transfer(command);
@@ -218,12 +223,12 @@ public class AccountController {
             @PathVariable UUID accountId,
             @Valid @RequestBody AccountLifecycleRequest request) {
         try {
-            EventMetadata metadata = new EventMetadata((int) (System.currentTimeMillis() % Integer.MAX_VALUE));
+            CommandContext context = new CommandContext((int) (System.currentTimeMillis() % Integer.MAX_VALUE));
             FreezeAccountCommand command = new FreezeAccountCommand(
                 accountId,
                 request.getReason(),
                 request.getPerformedBy(),
-                metadata
+                context
             );
             
             applicationService.freezeAccount(command);
@@ -245,12 +250,12 @@ public class AccountController {
             @PathVariable UUID accountId,
             @Valid @RequestBody AccountLifecycleRequest request) {
         try {
-            EventMetadata metadata = new EventMetadata((int) (System.currentTimeMillis() % Integer.MAX_VALUE));
+            CommandContext context = new CommandContext((int) (System.currentTimeMillis() % Integer.MAX_VALUE));
             CloseAccountCommand command = new CloseAccountCommand(
                 accountId,
                 request.getReason(),
                 request.getPerformedBy(),
-                metadata
+                context
             );
             
             applicationService.closeAccount(command);
@@ -272,12 +277,12 @@ public class AccountController {
             @PathVariable UUID accountId,
             @Valid @RequestBody AccountLifecycleRequest request) {
         try {
-            EventMetadata metadata = new EventMetadata((int) (System.currentTimeMillis() % Integer.MAX_VALUE));
+            CommandContext context = new CommandContext((int) (System.currentTimeMillis() % Integer.MAX_VALUE));
             ReactivateAccountCommand command = new ReactivateAccountCommand(
                 accountId,
                 request.getReason(),
                 request.getPerformedBy(),
-                metadata
+                context
             );
             
             applicationService.reactivateAccount(command);
@@ -299,12 +304,12 @@ public class AccountController {
             @PathVariable UUID accountId,
             @Valid @RequestBody AccountLifecycleRequest request) {
         try {
-            EventMetadata metadata = new EventMetadata((int) (System.currentTimeMillis() % Integer.MAX_VALUE));
+            CommandContext context = new CommandContext((int) (System.currentTimeMillis() % Integer.MAX_VALUE));
             MarkAccountDormantCommand command = new MarkAccountDormantCommand(
                 accountId,
                 request.getReason(),
                 request.getPerformedBy(),
-                metadata
+                context
             );
             
             applicationService.markAccountDormant(command);
@@ -329,18 +334,18 @@ public class AccountController {
             @Valid @RequestBody AccountLifecycleRequest request) {
         try {
             // Check account exists first
-            Optional<BankAccount> accountOpt = applicationService.findAccountById(accountId);
+            Optional<AccountDetailsResult> accountOpt = accountQueryUseCase.findAccountById(accountId);
             if (accountOpt.isEmpty()) {
                 return ResponseEntity.notFound().build();
             }
             
             // For now, suspend is implemented as freeze with different status
-            EventMetadata metadata = new EventMetadata((int) (System.currentTimeMillis() % Integer.MAX_VALUE));
+            CommandContext context = new CommandContext((int) (System.currentTimeMillis() % Integer.MAX_VALUE));
             FreezeAccountCommand command = new FreezeAccountCommand(
                 accountId,
                 "SUSPENDED: " + request.getReason(),
                 request.getPerformedBy(),
-                metadata
+                context
             );
             
             applicationService.freezeAccount(command);
@@ -363,18 +368,18 @@ public class AccountController {
             @Valid @RequestBody AccountLifecycleRequest request) {
         try {
             // Check account exists first
-            Optional<BankAccount> accountOpt = applicationService.findAccountById(accountId);
+            Optional<AccountDetailsResult> accountOpt = accountQueryUseCase.findAccountById(accountId);
             if (accountOpt.isEmpty()) {
                 return ResponseEntity.notFound().build();
             }
             
             // For now, lock is implemented as freeze with different status
-            EventMetadata metadata = new EventMetadata((int) (System.currentTimeMillis() % Integer.MAX_VALUE));
+            CommandContext context = new CommandContext((int) (System.currentTimeMillis() % Integer.MAX_VALUE));
             FreezeAccountCommand command = new FreezeAccountCommand(
                 accountId,
                 "LOCKED: " + request.getReason(),
                 request.getPerformedBy(),
-                metadata
+                context
             );
             
             applicationService.freezeAccount(command);
@@ -397,17 +402,17 @@ public class AccountController {
             @Valid @RequestBody AccountLifecycleRequest request) {
         try {
             // Check account exists first
-            Optional<BankAccount> accountOpt = applicationService.findAccountById(accountId);
+            Optional<AccountDetailsResult> accountOpt = accountQueryUseCase.findAccountById(accountId);
             if (accountOpt.isEmpty()) {
                 return ResponseEntity.notFound().build();
             }
             
-            EventMetadata metadata = new EventMetadata((int) (System.currentTimeMillis() % Integer.MAX_VALUE));
+            CommandContext context = new CommandContext((int) (System.currentTimeMillis() % Integer.MAX_VALUE));
             ReactivateAccountCommand command = new ReactivateAccountCommand(
                 accountId,
                 "UNLOCKED: " + request.getReason(),
                 request.getPerformedBy(),
-                metadata
+                context
             );
             
             applicationService.reactivateAccount(command);
@@ -431,7 +436,7 @@ public class AccountController {
             @RequestParam(defaultValue = "20") @Min(value = 1, message = "Size must be at least 1") @Max(value = 100, message = "Size cannot exceed 100") int size) {
         try {
             // Check account exists first
-            Optional<BankAccount> accountOpt = applicationService.findAccountById(accountId);
+            Optional<AccountDetailsResult> accountOpt = accountQueryUseCase.findAccountById(accountId);
             if (accountOpt.isEmpty()) {
                 return ResponseEntity.notFound().build();
             }
@@ -495,53 +500,20 @@ public class AccountController {
             @PathVariable UUID accountId,
             @PathVariable @Pattern(regexp = "DEPOSIT|WITHDRAW|TRANSFER|FREEZE|CLOSE|REACTIVATE", message = "Invalid action type") String action) {
         try {
-            Optional<BankAccount> accountOpt = applicationService.findAccountById(accountId);
-            if (accountOpt.isEmpty()) {
+            Optional<AccountActionResult> result = accountQueryUseCase.canPerformAction(accountId, action);
+            if (result.isEmpty()) {
                 return ResponseEntity.notFound().build();
             }
-            
-            BankAccount account = accountOpt.get();
-            
-            // Business logic to determine if action can be performed
-            boolean canPerform = true;
-            String reason = "Action is allowed";
-            
-            // TODO: Implement proper status checking from BankAccount
-            // For now, use simple logic based on current state
-            switch (action.toUpperCase()) {
-                case "DEPOSIT":
-                case "WITHDRAW":
-                case "TRANSFER":
-                    // These require account to be active
-                    canPerform = true; // TODO: Check account status
-                    break;
-                case "FREEZE":
-                    canPerform = true; // TODO: Check if already frozen
-                    break;
-                case "CLOSE":
-                    // Can close if balance is zero or positive
-                    canPerform = account.getBalance().getAmount().compareTo(BigDecimal.ZERO) >= 0;
-                    if (!canPerform) {
-                        reason = "Cannot close account with negative balance";
-                    }
-                    break;
-                case "REACTIVATE":
-                    canPerform = true; // TODO: Check if account is frozen/suspended
-                    break;
-                default:
-                    canPerform = false;
-                    reason = "Unknown action";
-            }
-            
+            AccountActionResult permission = result.get();
             Map<String, Object> response = Map.of(
-                "accountId", accountId,
-                "action", action,
-                "canPerform", canPerform,
-                "reason", reason,
-                "currentBalance", account.getBalance().getAmount(),
-                "accountStatus", "ACTIVE" // TODO: Get actual status
+                "accountId", permission.accountId(),
+                "action", permission.action(),
+                "canPerform", permission.canPerform(),
+                "reason", permission.reason(),
+                "currentBalance", permission.currentBalance(),
+                "accountStatus", permission.accountStatus()
             );
-            
+
             return ResponseEntity.ok(response);
             
         } catch (Exception e) {
@@ -552,12 +524,12 @@ public class AccountController {
     @GetMapping("/{accountId}/restrictions")
     public ResponseEntity<Map<String, Object>> getAccountRestrictions(@PathVariable UUID accountId) {
         try {
-            Optional<BankAccount> accountOpt = applicationService.findAccountById(accountId);
+            Optional<AccountDetailsResult> accountOpt = accountQueryUseCase.findAccountById(accountId);
             if (accountOpt.isEmpty()) {
                 return ResponseEntity.notFound().build();
             }
             
-            BankAccount account = accountOpt.get();
+            AccountDetailsResult account = accountOpt.get();
             
             // TODO: Implement proper restriction checking from domain model
             Map<String, Object> restrictions = Map.of(
@@ -567,7 +539,7 @@ public class AccountController {
                 "canTransfer", true,
                 "dailyWithdrawalLimit", 10000.00,
                 "monthlyTransferLimit", 50000.00,
-                "overdraftLimit", account.getOverdraftLimit().getAmount(),
+                "overdraftLimit", account.overdraftLimit(),
                 "status", "ACTIVE", // TODO: Get actual status
                 "restrictionReasons", java.util.List.of(),
                 "lastUpdated", java.time.LocalDateTime.now().toString()
@@ -593,7 +565,7 @@ public class AccountController {
             for (UUID accountId : request.getAccountIds()) {
                 try {
                     // Check if account exists
-                    Optional<BankAccount> accountOpt = applicationService.findAccountById(accountId);
+                    Optional<AccountDetailsResult> accountOpt = accountQueryUseCase.findAccountById(accountId);
                     if (accountOpt.isEmpty()) {
                         results.add(Map.of(
                             "accountId", accountId,
@@ -605,38 +577,38 @@ public class AccountController {
                     }
                     
                     // Perform the operation based on type
-                    EventMetadata metadata = new EventMetadata((int) (System.currentTimeMillis() % Integer.MAX_VALUE));
+                    CommandContext context = new CommandContext((int) (System.currentTimeMillis() % Integer.MAX_VALUE));
                     AccountLifecycleRequest lifecycleRequest = new AccountLifecycleRequest(request.getReason(), request.getPerformedBy());
                     
                     switch (request.getOperationType().toUpperCase()) {
                         case "FREEZE":
                             FreezeAccountCommand freezeCommand = new FreezeAccountCommand(
-                                accountId, request.getReason(), request.getPerformedBy(), metadata);
+                                accountId, request.getReason(), request.getPerformedBy(), context);
                             applicationService.freezeAccount(freezeCommand);
                             break;
                             
                         case "UNFREEZE":
                         case "REACTIVATE":
                             ReactivateAccountCommand reactivateCommand = new ReactivateAccountCommand(
-                                accountId, request.getReason(), request.getPerformedBy(), metadata);
+                                accountId, request.getReason(), request.getPerformedBy(), context);
                             applicationService.reactivateAccount(reactivateCommand);
                             break;
                             
                         case "SUSPEND":
                             FreezeAccountCommand suspendCommand = new FreezeAccountCommand(
-                                accountId, "SUSPENDED: " + request.getReason(), request.getPerformedBy(), metadata);
+                                accountId, "SUSPENDED: " + request.getReason(), request.getPerformedBy(), context);
                             applicationService.freezeAccount(suspendCommand);
                             break;
                             
                         case "CLOSE":
                             CloseAccountCommand closeCommand = new CloseAccountCommand(
-                                accountId, request.getReason(), request.getPerformedBy(), metadata);
+                                accountId, request.getReason(), request.getPerformedBy(), context);
                             applicationService.closeAccount(closeCommand);
                             break;
                             
                         case "MARK_DORMANT":
                             MarkAccountDormantCommand dormantCommand = new MarkAccountDormantCommand(
-                                accountId, request.getReason(), request.getPerformedBy(), metadata);
+                                accountId, request.getReason(), request.getPerformedBy(), context);
                             applicationService.markAccountDormant(dormantCommand);
                             break;
                             
@@ -701,21 +673,21 @@ public class AccountController {
     @GetMapping("/{accountId}/balance")
     public ResponseEntity<Map<String, Object>> getAccountBalance(@PathVariable UUID accountId) {
         try {
-            Optional<BankAccount> accountOpt = applicationService.findAccountById(accountId);
+            Optional<AccountDetailsResult> accountOpt = accountQueryUseCase.findAccountById(accountId);
             
             if (accountOpt.isEmpty()) {
                 return ResponseEntity.notFound().build();
             }
             
-            BankAccount account = accountOpt.get();
-            BigDecimal availableBalance = account.getBalance().getAmount().add(account.getOverdraftLimit().getAmount());
+            AccountDetailsResult account = accountOpt.get();
+            BigDecimal availableBalance = account.availableBalance();
             
             Map<String, Object> balanceInfo = Map.of(
                 "accountId", accountId,
-                "currentBalance", account.getBalance().getAmount(),
-                "overdraftLimit", account.getOverdraftLimit().getAmount(),
+                "currentBalance", account.balance(),
+                "overdraftLimit", account.overdraftLimit(),
                 "availableBalance", availableBalance,
-                "status", "ACTIVE" // TODO: Implement getStatus() method in BankAccount
+                "status", "ACTIVE" // TODO: Implement status checking
             );
             
             return ResponseEntity.ok(balanceInfo);
@@ -728,18 +700,18 @@ public class AccountController {
     @GetMapping("/{accountId}/status")
     public ResponseEntity<Map<String, Object>> getAccountStatus(@PathVariable UUID accountId) {
         try {
-            Optional<BankAccount> accountOpt = applicationService.findAccountById(accountId);
+            Optional<AccountDetailsResult> accountOpt = accountQueryUseCase.findAccountById(accountId);
             
             if (accountOpt.isEmpty()) {
                 return ResponseEntity.notFound().build();
             }
             
-            BankAccount account = accountOpt.get();
+            AccountDetailsResult account = accountOpt.get();
             
             Map<String, Object> statusInfo = Map.of(
                 "accountId", accountId,
-                "status", "ACTIVE", // TODO: Implement getStatus() method in BankAccount
-                "accountHolder", account.getAccountHolder().getFullName(),
+                "status", "ACTIVE", // TODO: Implement status checking
+                "accountHolder", account.accountHolderName(),
                 "isActive", true, // TODO: Implement proper status checking
                 "canTransact", true // TODO: Implement proper status checking
             );

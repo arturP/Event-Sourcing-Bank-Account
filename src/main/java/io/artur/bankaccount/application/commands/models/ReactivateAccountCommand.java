@@ -1,7 +1,5 @@
 package io.artur.bankaccount.application.commands.models;
 
-import io.artur.bankaccount.domain.shared.events.EventMetadata;
-
 import java.util.UUID;
 
 public class ReactivateAccountCommand {
@@ -9,13 +7,13 @@ public class ReactivateAccountCommand {
     private final UUID accountId;
     private final String reason;
     private final String reactivatedBy;
-    private final EventMetadata metadata;
+    private final CommandContext context;
     
-    public ReactivateAccountCommand(UUID accountId, String reason, String reactivatedBy, EventMetadata metadata) {
+    public ReactivateAccountCommand(UUID accountId, String reason, String reactivatedBy, CommandContext context) {
         this.accountId = accountId;
         this.reason = reason;
         this.reactivatedBy = reactivatedBy;
-        this.metadata = metadata;
+        this.context = context;
     }
     
     public UUID getAccountId() {
@@ -30,8 +28,8 @@ public class ReactivateAccountCommand {
         return reactivatedBy;
     }
     
-    public EventMetadata getMetadata() {
-        return metadata;
+    public CommandContext getContext() {
+        return context;
     }
     
     public void validate() {
@@ -44,8 +42,8 @@ public class ReactivateAccountCommand {
         if (reactivatedBy == null || reactivatedBy.trim().isEmpty()) {
             throw new IllegalArgumentException("Reactivated by cannot be null or empty");
         }
-        if (metadata == null) {
-            throw new IllegalArgumentException("Event metadata cannot be null");
+        if (context == null) {
+            throw new IllegalArgumentException("Command context cannot be null");
         }
     }
 }

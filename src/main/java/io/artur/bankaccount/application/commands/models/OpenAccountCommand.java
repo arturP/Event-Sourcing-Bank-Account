@@ -1,7 +1,5 @@
 package io.artur.bankaccount.application.commands.models;
 
-import io.artur.bankaccount.domain.shared.events.EventMetadata;
-
 import java.math.BigDecimal;
 import java.util.UUID;
 
@@ -10,13 +8,13 @@ public class OpenAccountCommand {
     private final UUID accountId;
     private final String accountHolder;
     private final BigDecimal overdraftLimit;
-    private final EventMetadata metadata;
+    private final CommandContext context;
     
-    public OpenAccountCommand(UUID accountId, String accountHolder, BigDecimal overdraftLimit, EventMetadata metadata) {
+    public OpenAccountCommand(UUID accountId, String accountHolder, BigDecimal overdraftLimit, CommandContext context) {
         this.accountId = accountId;
         this.accountHolder = accountHolder;
         this.overdraftLimit = overdraftLimit;
-        this.metadata = metadata;
+        this.context = context;
     }
     
     public UUID getAccountId() {
@@ -31,8 +29,8 @@ public class OpenAccountCommand {
         return overdraftLimit;
     }
     
-    public EventMetadata getMetadata() {
-        return metadata;
+    public CommandContext getContext() {
+        return context;
     }
     
     public void validate() {

@@ -67,7 +67,7 @@ class NativeInfrastructureApiIntegrationTest {
         TransactionQueryHandler transactionQueryHandler = new TransactionQueryHandler(transactionRepo);
         
         // Create controller and MockMvc
-        AccountController controller = new AccountController(applicationService, accountQueryHandler, transactionQueryHandler);
+        AccountController controller = new AccountController(applicationService, applicationService, accountQueryHandler, transactionQueryHandler);
         mockMvc = MockMvcBuilders.standaloneSetup(controller).build();
         objectMapper = new ObjectMapper();
     }
