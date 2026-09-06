@@ -3,7 +3,6 @@ package io.artur.bankaccount.infrastructure.monitoring;
 import io.artur.bankaccount.application.ports.outgoing.MetricsPort;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.stereotype.Component;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -19,7 +18,6 @@ import java.util.function.Supplier;
  * Native metrics collector implementation that directly implements MetricsPort
  * without depending on legacy infrastructure
  */
-@Component
 public class NativeMetricsCollector implements MetricsPort {
     
     private static final Logger logger = LoggerFactory.getLogger(NativeMetricsCollector.class);

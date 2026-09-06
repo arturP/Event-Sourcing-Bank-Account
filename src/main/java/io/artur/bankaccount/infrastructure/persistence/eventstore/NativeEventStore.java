@@ -3,7 +3,6 @@ package io.artur.bankaccount.infrastructure.persistence.eventstore;
 import io.artur.bankaccount.application.ports.outgoing.EventStorePort;
 import io.artur.bankaccount.domain.shared.events.DomainEvent;
 import io.artur.bankaccount.infrastructure.persistence.eventstore.serialization.EventSerializer;
-import org.springframework.stereotype.Component;
 
 import javax.sql.DataSource;
 import java.sql.*;
@@ -18,7 +17,6 @@ import java.util.concurrent.atomic.AtomicLong;
  * Native event store implementation that directly implements EventStorePort
  * without depending on legacy infrastructure
  */
-@Component
 public class NativeEventStore implements EventStorePort {
     
     private final DataSource dataSource;

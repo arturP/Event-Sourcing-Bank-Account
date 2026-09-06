@@ -3,7 +3,6 @@ package io.artur.bankaccount.infrastructure.persistence.cache;
 import io.artur.bankaccount.application.ports.outgoing.CachePort;
 import io.artur.bankaccount.domain.account.aggregates.BankAccount;
 import io.artur.bankaccount.domain.shared.valueobjects.Money;
-import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -20,7 +19,6 @@ import java.util.function.Supplier;
  * Native cache service implementation that directly implements CachePort
  * without depending on legacy infrastructure
  */
-@Component
 public class NativeCacheService implements CachePort {
     
     private final Map<UUID, CachedBalance> balanceCache = new ConcurrentHashMap<>();

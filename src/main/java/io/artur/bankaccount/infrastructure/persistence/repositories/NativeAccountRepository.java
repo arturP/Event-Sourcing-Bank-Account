@@ -6,7 +6,6 @@ import io.artur.bankaccount.domain.account.aggregates.BankAccount;
 import io.artur.bankaccount.domain.account.events.AccountDomainEvent;
 import io.artur.bankaccount.domain.account.valueobjects.AccountNumber;
 import io.artur.bankaccount.domain.shared.events.DomainEvent;
-import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import java.util.Optional;
@@ -18,7 +17,6 @@ import java.util.concurrent.CompletableFuture;
  * Native account repository implementation that uses the native event store
  * without depending on legacy infrastructure
  */
-@Repository
 public class NativeAccountRepository implements AccountRepository {
     
     private final EventStorePort eventStore;

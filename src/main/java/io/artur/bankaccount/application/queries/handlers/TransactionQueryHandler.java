@@ -1,5 +1,7 @@
 package io.artur.bankaccount.application.queries.handlers;
 
+import io.artur.bankaccount.application.ports.incoming.TransactionQueryUseCase;
+import io.artur.bankaccount.application.queries.readmodels.TransactionStatistics;
 import io.artur.bankaccount.application.ports.outgoing.TransactionHistoryQueryRepository;
 import io.artur.bankaccount.application.queries.models.TransactionHistoryQuery;
 import io.artur.bankaccount.application.queries.readmodels.PagedResult;
@@ -13,7 +15,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 @Service
-public class TransactionQueryHandler {
+public class TransactionQueryHandler implements TransactionQueryUseCase {
     
     private final TransactionHistoryQueryRepository repository;
     
@@ -25,6 +27,7 @@ public class TransactionQueryHandler {
         return repository.findByTransactionId(transactionId);
     }
     
+    @Override
     public PagedResult<TransactionReadModel> getTransactionHistory(TransactionHistoryQuery query) {
         return repository.getTransactionHistory(query);
     }
@@ -33,7 +36,9 @@ public class TransactionQueryHandler {
         return repository.getRecentTransactions(accountId, limit);
     }
     
-    public List<TransactionReadModel> getTransactionsByDateRange(UUID accountId, LocalDateTime from, LocalDateTime to) {
+    public List<TransactionReadModel> getTransactionsByDateRange(UUID accountId,
+                                                                 LocalDateTime from,
+                                                                 LocalDateTime to) {
         return repository.findByAccountAndDateRange(accountId, from, to);
     }
     
@@ -41,7 +46,9 @@ public class TransactionQueryHandler {
         return repository.findByAccountAndType(accountId, transactionType);
     }
     
-    public List<TransactionReadModel> getTransactionsByAmountRange(UUID accountId, BigDecimal minAmount, BigDecimal maxAmount) {
+    public List<TransactionReadModel> getTransactionsByAmountRange(UUID accountId,
+                                                                   BigDecimal minAmount,
+                                                                   BigDecimal maxAmount) {
         return repository.findByAccountAndAmountRange(accountId, minAmount, maxAmount);
     }
     
@@ -49,13 +56,15 @@ public class TransactionQueryHandler {
         return repository.findLargeTransactions(accountId, threshold);
     }
     
-    public TransactionHistoryQueryRepository.TransactionStatistics getTransactionStatistics(UUID accountId) {
+    @Override
+    public TransactionStatistics getTransactionStatistics(UUID accountId) {
         return repository.getTransactionStatistics(accountId);
     }
     
-    public TransactionHistoryQueryRepository.TransactionStatistics getTransactionStatistics(UUID accountId, 
-                                                                                           LocalDateTime from, 
-                                                                                           LocalDateTime to) {
+    @Override
+    public TransactionStatistics getTransactionStatistics(UUID accountId,
+                                                          LocalDateTime from,
+                                                          LocalDateTime to) {
         return repository.getTransactionStatistics(accountId, from, to);
     }
     

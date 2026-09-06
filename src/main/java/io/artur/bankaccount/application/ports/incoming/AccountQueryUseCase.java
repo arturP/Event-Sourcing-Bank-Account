@@ -1,7 +1,9 @@
 package io.artur.bankaccount.application.ports.incoming;
 
-import io.artur.bankaccount.domain.account.aggregates.BankAccount;
-import io.artur.bankaccount.domain.shared.valueobjects.Money;
+import io.artur.bankaccount.application.queries.readmodels.AccountDetailsResult;
+import io.artur.bankaccount.application.queries.readmodels.AccountActionResult;
+
+import java.math.BigDecimal;
 
 import java.util.List;
 import java.util.Optional;
@@ -9,9 +11,11 @@ import java.util.UUID;
 
 public interface AccountQueryUseCase {
     
-    Optional<BankAccount> findAccountById(UUID accountId);
+    Optional<AccountDetailsResult> findAccountById(UUID accountId);
     
-    List<BankAccount> findAllAccounts();
+    List<AccountDetailsResult> findAllAccounts();
     
-    Money getAccountBalance(UUID accountId);
+    BigDecimal getAccountBalance(UUID accountId);
+
+    Optional<AccountActionResult> canPerformAction(UUID accountId, String action);
 }

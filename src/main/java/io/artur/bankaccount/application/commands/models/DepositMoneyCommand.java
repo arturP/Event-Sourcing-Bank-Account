@@ -1,7 +1,5 @@
 package io.artur.bankaccount.application.commands.models;
 
-import io.artur.bankaccount.domain.shared.events.EventMetadata;
-
 import java.math.BigDecimal;
 import java.util.UUID;
 
@@ -9,12 +7,12 @@ public class DepositMoneyCommand {
     
     private final UUID accountId;
     private final BigDecimal amount;
-    private final EventMetadata metadata;
+    private final CommandContext context;
     
-    public DepositMoneyCommand(UUID accountId, BigDecimal amount, EventMetadata metadata) {
+    public DepositMoneyCommand(UUID accountId, BigDecimal amount, CommandContext context) {
         this.accountId = accountId;
         this.amount = amount;
-        this.metadata = metadata;
+        this.context = context;
     }
     
     public UUID getAccountId() {
@@ -25,8 +23,8 @@ public class DepositMoneyCommand {
         return amount;
     }
     
-    public EventMetadata getMetadata() {
-        return metadata;
+    public CommandContext getContext() {
+        return context;
     }
     
     public void validate() {

@@ -1,7 +1,7 @@
 package io.artur.bankaccount.api.dto;
 
+import io.artur.bankaccount.application.queries.readmodels.TransactionStatistics;
 import com.fasterxml.jackson.annotation.JsonFormat;
-import io.artur.bankaccount.application.ports.outgoing.TransactionHistoryQueryRepository;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -53,7 +53,7 @@ public class TransactionStatisticsResponse {
         this.lastTransactionDate = lastTransactionDate;
     }
     
-    public static TransactionStatisticsResponse fromStatistics(TransactionHistoryQueryRepository.TransactionStatistics stats) {
+    public static TransactionStatisticsResponse fromStatistics(TransactionStatistics stats) {
         return new TransactionStatisticsResponse(
             stats.getTotalTransactions(),
             stats.getDepositCount(),

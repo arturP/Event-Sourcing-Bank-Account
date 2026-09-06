@@ -1,12 +1,12 @@
 package io.artur.bankaccount.api;
 
 import io.artur.bankaccount.api.controller.AccountController;
-import io.artur.bankaccount.application.services.AccountApplicationService;
-import io.artur.bankaccount.application.queries.handlers.AccountQueryHandler;
-import io.artur.bankaccount.application.queries.handlers.TransactionQueryHandler;
-import io.artur.bankaccount.domain.account.aggregates.BankAccount;
-import io.artur.bankaccount.domain.shared.events.EventMetadata;
-import io.artur.bankaccount.domain.shared.valueobjects.Money;
+import io.artur.bankaccount.application.ports.incoming.AccountManagementUseCase;
+import io.artur.bankaccount.application.ports.incoming.AccountQueryUseCase;
+import io.artur.bankaccount.application.ports.incoming.AccountSummaryQueryUseCase;
+import io.artur.bankaccount.application.ports.incoming.TransactionQueryUseCase;
+import io.artur.bankaccount.application.queries.readmodels.AccountDetailsResult;
+import io.artur.bankaccount.application.queries.readmodels.AccountActionResult;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -44,13 +44,16 @@ class AccountRestApiTest {
     private ObjectMapper objectMapper;
     
     @MockBean
-    private AccountApplicationService applicationService;
+    private AccountManagementUseCase applicationService;
+
+    @MockBean
+    private AccountQueryUseCase accountQueryUseCase;
     
     @MockBean
-    private AccountQueryHandler accountQueryHandler;
+    private AccountSummaryQueryUseCase accountQueryHandler;
     
     @MockBean
-    private TransactionQueryHandler transactionQueryHandler;
+    private TransactionQueryUseCase transactionQueryHandler;
     
     @Test
     void shouldCreateAccountSuccessfully() throws Exception {
@@ -83,17 +86,10 @@ class AccountRestApiTest {
     void shouldReturnAccountDetails() throws Exception {
         // Given
         UUID accountId = UUID.randomUUID();
-        EventMetadata metadata = new EventMetadata(1);
-        
-        BankAccount account = BankAccount.openNewAccount(
-            accountId,
-            "Jane Smith", 
-            BigDecimal.valueOf(500), 
-            metadata
-        );
-        account.deposit(BigDecimal.valueOf(250), metadata);
-        
-        when(applicationService.findAccountById(accountId)).thenReturn(Optional.of(account));
+        AccountDetailsResult account = new AccountDetailsResult(accountId, "Jane Smith",
+                BigDecimal.valueOf(250), BigDecimal.valueOf(500), BigDecimal.valueOf(750), "ACTIVE");
+
+        when(accountQueryUseCase.findAccountById(accountId)).thenReturn(Optional.of(account));
         
         // When & Then
         mockMvc.perform(get("/api/accounts/{accountId}", accountId))
@@ -104,20 +100,35 @@ class AccountRestApiTest {
                 .andExpect(jsonPath("$.balance").value(250))
                 .andExpect(jsonPath("$.availableBalance").value(750)); // 250 + 500 overdraft
         
-        verify(applicationService).findAccountById(accountId);
+        verify(accountQueryUseCase).findAccountById(accountId);
     }
     
     @Test
     void shouldReturnNotFoundForNonexistentAccount() throws Exception {
         // Given
         UUID accountId = UUID.randomUUID();
-        when(applicationService.findAccountById(accountId)).thenReturn(Optional.empty());
+        when(accountQueryUseCase.findAccountById(accountId)).thenReturn(Optional.empty());
         
         // When & Then
         mockMvc.perform(get("/api/accounts/{accountId}", accountId))
                 .andExpect(status().isNotFound());
         
-        verify(applicationService).findAccountById(accountId);
+        verify(accountQueryUseCase).findAccountById(accountId);
+    }
+
+    @Test
+    void shouldUseActionDecisionReturnedByTheInputPort() throws Exception {
+        UUID accountId = UUID.randomUUID();
+        when(accountQueryUseCase.canPerformAction(accountId, "FREEZE"))
+                .thenReturn(Optional.of(new AccountActionResult(accountId, "FREEZE", false,
+                        "Already frozen", new BigDecimal("25.00"), "FROZEN")));
+
+        mockMvc.perform(get("/api/accounts/{id}/can-perform/FREEZE", accountId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.canPerform").value(false))
+                .andExpect(jsonPath("$.reason").value("Already frozen"))
+                .andExpect(jsonPath("$.accountStatus").value("FROZEN"));
+        verify(accountQueryUseCase).canPerformAction(accountId, "FREEZE");
     }
     
     @Test

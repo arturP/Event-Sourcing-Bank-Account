@@ -6,10 +6,14 @@ import io.artur.bankaccount.application.ports.incoming.AccountQueryUseCase;
 import io.artur.bankaccount.application.ports.outgoing.AccountRepository;
 import io.artur.bankaccount.application.ports.outgoing.CachePort;
 import io.artur.bankaccount.application.ports.outgoing.MetricsPort;
-import io.artur.bankaccount.application.services.AsyncEventProcessor;
+import io.artur.bankaccount.application.queries.readmodels.AccountDetailsResult;
+import io.artur.bankaccount.application.queries.readmodels.AccountActionResult;
+import io.artur.bankaccount.domain.shared.events.EventMetadata;
+
 import io.artur.bankaccount.domain.account.aggregates.BankAccount;
 import io.artur.bankaccount.domain.shared.valueobjects.Money;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -47,12 +51,13 @@ public class AccountApplicationService implements AccountManagementUseCase, Acco
     public UUID openAccount(OpenAccountCommand command) {
         return recordMetrics(() -> {
             command.validate();
+            EventMetadata metadata = toEventMetadata(command.getContext());
             
             BankAccount account = BankAccount.openNewAccount(
                 command.getAccountId(),
                 command.getAccountHolder(),
                 command.getOverdraftLimit(),
-                command.getMetadata()
+                metadata
             );
             
             accountRepository.save(account);
@@ -80,9 +85,10 @@ public class AccountApplicationService implements AccountManagementUseCase, Acco
     public void deposit(DepositMoneyCommand command) {
         recordMetrics(() -> {
             command.validate();
+            EventMetadata metadata = toEventMetadata(command.getContext());
             
             BankAccount account = loadAccount(command.getAccountId());
-            account.deposit(command.getAmount(), command.getMetadata());
+            account.deposit(command.getAmount(), metadata);
             accountRepository.save(account);
             
             // Process events asynchronously
@@ -107,10 +113,11 @@ public class AccountApplicationService implements AccountManagementUseCase, Acco
     public void withdraw(WithdrawMoneyCommand command) {
         recordMetrics(() -> {
             command.validate();
+            EventMetadata metadata = toEventMetadata(command.getContext());
             
             try {
                 BankAccount account = loadAccount(command.getAccountId());
-                account.withdraw(command.getAmount(), command.getMetadata());
+                account.withdraw(command.getAmount(), metadata);
                 accountRepository.save(account);
                 
                 // Process events asynchronously
@@ -142,12 +149,13 @@ public class AccountApplicationService implements AccountManagementUseCase, Acco
     public void transfer(TransferMoneyCommand command) {
         recordMetrics(() -> {
             command.validate();
+            EventMetadata metadata = toEventMetadata(command.context());
             
-            BankAccount fromAccount = loadAccount(command.getFromAccountId());
-            BankAccount toAccount = loadAccount(command.getToAccountId());
+            BankAccount fromAccount = loadAccount(command.fromAccountId());
+            BankAccount toAccount = loadAccount(command.toAccountId());
             
-            fromAccount.transferOut(command.getToAccountId(), command.getAmount(), command.getDescription(), command.getMetadata());
-            toAccount.receiveTransfer(command.getFromAccountId(), command.getAmount(), command.getDescription(), command.getMetadata());
+            fromAccount.transferOut(command.toAccountId(), command.amount(), command.description(), metadata);
+            toAccount.receiveTransfer(command.fromAccountId(), command.amount(), command.description(), metadata);
             
             accountRepository.save(fromAccount);
             accountRepository.save(toAccount);
@@ -176,7 +184,7 @@ public class AccountApplicationService implements AccountManagementUseCase, Acco
     }
     
     @Override
-    public Optional<BankAccount> findAccountById(UUID accountId) {
+    public Optional<AccountDetailsResult> findAccountById(UUID accountId) {
         return recordMetrics(() -> {
             // Try cache first
             if (cachePort != null) {
@@ -190,17 +198,17 @@ public class AccountApplicationService implements AccountManagementUseCase, Acco
                 }
             }
             
-            return accountRepository.findById(accountId);
+            return accountRepository.findById(accountId).map(this::toAccountDetails);
         });
     }
     
     @Override
-    public List<BankAccount> findAllAccounts() {
-        return recordMetrics(() -> accountRepository.findAll());
+    public List<AccountDetailsResult> findAllAccounts() {
+        return recordMetrics(() -> accountRepository.findAll().stream().map(this::toAccountDetails).toList());
     }
     
     @Override
-    public Money getAccountBalance(UUID accountId) {
+    public BigDecimal getAccountBalance(UUID accountId) {
         return recordMetrics(() -> {
             // Try cache first
             if (cachePort != null) {
@@ -209,7 +217,7 @@ public class AccountApplicationService implements AccountManagementUseCase, Acco
                     if (metricsPort != null) {
                         metricsPort.recordCacheHit("balance");
                     }
-                    return cachedBalance.get();
+                    return cachedBalance.get().getAmount();
                 } else if (metricsPort != null) {
                     metricsPort.recordCacheMiss("balance");
                 }
@@ -224,12 +232,42 @@ public class AccountApplicationService implements AccountManagementUseCase, Acco
                 cachePort.updateBalance(accountId, balance);
             }
             
-            return balance;
+            return balance.getAmount();
         });
     }
     
+    @Override
+    public Optional<AccountActionResult> canPerformAction(UUID accountId, String action) {
+        return findAccountById(accountId).map(account -> {
+            // Preserve the existing API policy; lifecycle-aware permissions are a separate change.
+            boolean allowed = switch (action.toUpperCase(java.util.Locale.ROOT)) {
+                case "DEPOSIT", "WITHDRAW", "TRANSFER", "FREEZE", "REACTIVATE" -> true;
+                case "CLOSE" -> account.balance().compareTo(BigDecimal.ZERO) >= 0;
+                default -> false;
+            };
+            String reason = allowed ? "Action is allowed"
+                    : "CLOSE".equalsIgnoreCase(action) ? "Cannot close account with negative balance" : "Unknown action";
+            return new AccountActionResult(accountId, action, allowed, reason, account.balance(), "ACTIVE");
+        });
+    }
+
     // Helper methods
     
+    private AccountDetailsResult toAccountDetails(BankAccount account) {
+        BigDecimal balance = account.getBalance().getAmount();
+        BigDecimal overdraftLimit = account.getOverdraftLimit().getAmount();
+        return new AccountDetailsResult(account.getAccountId(), account.getAccountHolder().getFullName(),
+                balance, overdraftLimit, balance.add(overdraftLimit), account.getAccountStatus().getStatus().name());
+    }
+
+    private EventMetadata toEventMetadata(CommandContext context) {
+        if (context == null) {
+            throw new IllegalArgumentException("Command context cannot be null");
+        }
+        return new EventMetadata(context.correlationId(), context.causationId(), context.userId(),
+                context.userAgent(), context.ipAddress(), context.version(), context.additionalProperties());
+    }
+
     private BankAccount loadAccount(UUID accountId) {
         return accountRepository.findById(accountId)
                 .orElseThrow(() -> new IllegalArgumentException("Account not found: " + accountId));
@@ -253,12 +291,14 @@ public class AccountApplicationService implements AccountManagementUseCase, Acco
     
     // Account Lifecycle Management Methods
     
+    @Override
     public void freezeAccount(FreezeAccountCommand command) {
         recordMetrics(() -> {
             command.validate();
+            EventMetadata metadata = toEventMetadata(command.getContext());
             
             BankAccount account = loadAccount(command.getAccountId());
-            account.freeze(command.getReason(), command.getFrozenBy(), command.getMetadata());
+            account.freeze(command.getReason(), command.getFrozenBy(), metadata);
             accountRepository.save(account);
             
             // Invalidate cache entries for frozen account
@@ -273,12 +313,14 @@ public class AccountApplicationService implements AccountManagementUseCase, Acco
         });
     }
     
+    @Override
     public void closeAccount(CloseAccountCommand command) {
         recordMetrics(() -> {
             command.validate();
+            EventMetadata metadata = toEventMetadata(command.getContext());
             
             BankAccount account = loadAccount(command.getAccountId());
-            account.close(command.getReason(), command.getClosedBy(), command.getMetadata());
+            account.close(command.getReason(), command.getClosedBy(), metadata);
             accountRepository.save(account);
             
             // Invalidate cache entries for closed account
@@ -293,12 +335,14 @@ public class AccountApplicationService implements AccountManagementUseCase, Acco
         });
     }
     
+    @Override
     public void reactivateAccount(ReactivateAccountCommand command) {
         recordMetrics(() -> {
             command.validate();
+            EventMetadata metadata = toEventMetadata(command.getContext());
             
             BankAccount account = loadAccount(command.getAccountId());
-            account.reactivate(command.getReason(), command.getReactivatedBy(), command.getMetadata());
+            account.reactivate(command.getReason(), command.getReactivatedBy(), metadata);
             accountRepository.save(account);
             
             // Invalidate cache entries for reactivated account
@@ -313,12 +357,14 @@ public class AccountApplicationService implements AccountManagementUseCase, Acco
         });
     }
     
+    @Override
     public void markAccountDormant(MarkAccountDormantCommand command) {
         recordMetrics(() -> {
             command.validate();
+            EventMetadata metadata = toEventMetadata(command.getContext());
             
             BankAccount account = loadAccount(command.getAccountId());
-            account.markDormant(command.getReason(), command.getMarkedBy(), command.getMetadata());
+            account.markDormant(command.getReason(), command.getMarkedBy(), metadata);
             accountRepository.save(account);
             
             // Invalidate cache entries for dormant account

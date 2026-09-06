@@ -1,46 +1,14 @@
 package io.artur.bankaccount.application.commands.models;
 
-import io.artur.bankaccount.domain.shared.events.EventMetadata;
-
 import java.math.BigDecimal;
 import java.util.UUID;
 
-public class TransferMoneyCommand {
-    
-    private final UUID fromAccountId;
-    private final UUID toAccountId;
-    private final BigDecimal amount;
-    private final String description;
-    private final EventMetadata metadata;
-    
-    public TransferMoneyCommand(UUID fromAccountId, UUID toAccountId, BigDecimal amount, String description, EventMetadata metadata) {
-        this.fromAccountId = fromAccountId;
-        this.toAccountId = toAccountId;
-        this.amount = amount;
-        this.description = description;
-        this.metadata = metadata;
-    }
-    
-    public UUID getFromAccountId() {
-        return fromAccountId;
-    }
-    
-    public UUID getToAccountId() {
-        return toAccountId;
-    }
-    
-    public BigDecimal getAmount() {
-        return amount;
-    }
-    
-    public String getDescription() {
-        return description;
-    }
-    
-    public EventMetadata getMetadata() {
-        return metadata;
-    }
-    
+public record TransferMoneyCommand(UUID fromAccountId,
+                                   UUID toAccountId,
+                                   BigDecimal amount,
+                                   String description,
+                                   CommandContext context) {
+
     public void validate() {
         if (fromAccountId == null) {
             throw new IllegalArgumentException("From account ID cannot be null");

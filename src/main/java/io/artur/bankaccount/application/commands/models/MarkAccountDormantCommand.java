@@ -1,7 +1,5 @@
 package io.artur.bankaccount.application.commands.models;
 
-import io.artur.bankaccount.domain.shared.events.EventMetadata;
-
 import java.util.UUID;
 
 public class MarkAccountDormantCommand {
@@ -9,13 +7,13 @@ public class MarkAccountDormantCommand {
     private final UUID accountId;
     private final String reason;
     private final String markedBy;
-    private final EventMetadata metadata;
+    private final CommandContext context;
     
-    public MarkAccountDormantCommand(UUID accountId, String reason, String markedBy, EventMetadata metadata) {
+    public MarkAccountDormantCommand(UUID accountId, String reason, String markedBy, CommandContext context) {
         this.accountId = accountId;
         this.reason = reason;
         this.markedBy = markedBy;
-        this.metadata = metadata;
+        this.context = context;
     }
     
     public UUID getAccountId() {
@@ -30,8 +28,8 @@ public class MarkAccountDormantCommand {
         return markedBy;
     }
     
-    public EventMetadata getMetadata() {
-        return metadata;
+    public CommandContext getContext() {
+        return context;
     }
     
     public void validate() {
@@ -44,8 +42,8 @@ public class MarkAccountDormantCommand {
         if (markedBy == null || markedBy.trim().isEmpty()) {
             throw new IllegalArgumentException("Marked by cannot be null or empty");
         }
-        if (metadata == null) {
-            throw new IllegalArgumentException("Event metadata cannot be null");
+        if (context == null) {
+            throw new IllegalArgumentException("Command context cannot be null");
         }
     }
 }

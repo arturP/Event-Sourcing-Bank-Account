@@ -1,6 +1,6 @@
 package io.artur.bankaccount.api.dto;
 
-import io.artur.bankaccount.application.ports.outgoing.AccountSummaryQueryRepository;
+import io.artur.bankaccount.application.queries.readmodels.AccountStatistics;
 
 import java.math.BigDecimal;
 
@@ -28,7 +28,7 @@ public class AccountStatisticsResponse {
         this.averageBalance = averageBalance;
     }
     
-    public static AccountStatisticsResponse fromStatistics(AccountSummaryQueryRepository.AccountStatistics stats) {
+    public static AccountStatisticsResponse fromStatistics(AccountStatistics stats) {
         return new AccountStatisticsResponse(
             stats.getTotalAccounts(),
             stats.getActiveAccounts(),
